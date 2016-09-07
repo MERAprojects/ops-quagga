@@ -2410,6 +2410,18 @@ bgp_nbr_update_source_ovsdb_apply_changes (const struct ovsrec_bgp_neighbor *ovs
     }
 }
 
+static void
+bgp_nbr_weight_ovsdb_apply_changes (const struct ovsrec_bgp_neighbor *ovs_nbr,
+    const struct ovsrec_bgp_router *ovs_bgp,
+    char *name,
+    struct bgp *bgp_instance)
+{
+    if (COL_CHANGED (ovs_nbr, ovsrec_bgp_neighbor_col_weight, idl_seqno)) {
+        daemon_neighbor_weight_cmd_execute (bgp_instance, name,
+            (uint16_t) *ovs_nbr->weight);
+    }
+}
+
 /*
  * Find bgp neighbor for clear counter updates
  */
@@ -2831,7 +2843,9 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
 	    /* update_source */
             bgp_nbr_update_source_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
-
+        /* weight */
+            bgp_nbr_weight_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
+                ovs_bgp->key_bgp_neighbors[j], bgp_instance);
          }
       }
    }
