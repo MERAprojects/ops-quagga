@@ -1105,7 +1105,7 @@ DEFUN (shutdown_if,
   ifp = (struct interface *) vty->index;
   if (ifp->ifindex != IFINDEX_INTERNAL)
     {
-        ret = if_unset_flags (ifp, IFF_UP);
+        ret = if_unset_flags (ifp, IFF_UP | IFF_RUNNING);
         if (ret < 0)
           {
             vty_out (vty, "Can't shutdown interface%s", VTY_NEWLINE);
