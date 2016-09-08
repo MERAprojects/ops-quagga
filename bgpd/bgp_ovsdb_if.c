@@ -2122,10 +2122,6 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
         &peer->local_as, 1);
      */
 
-    VLOG_DBG("updating weight to %d\n", peer->weight);
-    ovsrec_bgp_neighbor_set_weight(ovs_bgp_neighbor_ptr,
-        (int64_t*) &peer->weight, 1);
-
     smap_init(&smap);
     smap_add(&smap, BGP_PEER_STATE, bgp_peer_status_to_string(peer->status));
     VLOG_DBG("updating bgp neighbor status to %s\n",
@@ -2416,9 +2412,12 @@ bgp_nbr_weight_ovsdb_apply_changes (const struct ovsrec_bgp_neighbor *ovs_nbr,
     char *name,
     struct bgp *bgp_instance)
 {
+    uint16_t weight;
+
     if (COL_CHANGED (ovs_nbr, ovsrec_bgp_neighbor_col_weight, idl_seqno)) {
-        daemon_neighbor_weight_cmd_execute (bgp_instance, name,
+        weight = (ovs_nbr->n_weight == 0 ? BGP_ATTR_DEFAULT_WEIGHT :
             (uint16_t) *ovs_nbr->weight);
+        daemon_neighbor_weight_cmd_execute (bgp_instance, name, weight);
     }
 }
 

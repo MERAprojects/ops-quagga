@@ -2277,6 +2277,7 @@ daemon_neighbor_weight_cmd_execute (struct bgp *bgp, const char *peer_str,
     return CMD_WARNING;
   }
 
+  VLOG_DBG("Updating peer %s weight to %d", peer->host, weight);
   peer_weight_set (peer, weight);
 }
 
