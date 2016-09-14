@@ -130,6 +130,17 @@ bgp_interface_up (int command, struct zclient *zclient, zebra_size_t length)
   for (ALL_LIST_ELEMENTS (ifp->connected, node, nnode, c))
     bgp_connected_add (c);
 
+	struct listnode *mnode;
+	struct bgp *bgp;
+	struct peer *peer;
+	for (ALL_LIST_ELEMENTS_RO (bm->bgp, mnode, bgp))
+	{
+		for (ALL_LIST_ELEMENTS (bgp->peer, node, nnode, peer))
+		{
+			if (ifp == peer->nexthop.ifp)
+				BGP_EVENT_ADD (peer, BGP_Start);
+		}
+	}
   return 0;
 }
 
