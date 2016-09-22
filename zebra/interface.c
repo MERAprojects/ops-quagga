@@ -1104,18 +1104,17 @@ DEFUN (shutdown_if,
 
   ifp = (struct interface *) vty->index;
   if (ifp->ifindex != IFINDEX_INTERNAL)
+  {
+    ret = if_unset_flags (ifp, IFF_UP | IFF_RUNNING);
+    if (ret < 0)
     {
-        ret = if_unset_flags (ifp, IFF_UP | IFF_RUNNING);
-        if (ret < 0)
-          {
-            vty_out (vty, "Can't shutdown interface%s", VTY_NEWLINE);
-            return CMD_WARNING;
-          }
-        if_refresh (ifp);
+      vty_out (vty, "Can't shutdown interface%s", VTY_NEWLINE);
+      return CMD_WARNING;
     }
-  if_data = ifp->info;
-  if_data->shutdown = IF_ZEBRA_SHUTDOWN_ON;
-
+    if_data = ifp->info;
+    if_data->shutdown = IF_ZEBRA_SHUTDOWN_ON;
+    if_refresh (ifp);
+  }
   return CMD_SUCCESS;
 }
 
@@ -1132,23 +1131,22 @@ DEFUN (no_shutdown_if,
   ifp = (struct interface *) vty->index;
 
   if (ifp->ifindex != IFINDEX_INTERNAL)
+  {
+    ret = if_set_flags (ifp, IFF_UP | IFF_RUNNING);
+    if (ret < 0)
     {
-      ret = if_set_flags (ifp, IFF_UP | IFF_RUNNING);
-      if (ret < 0)
-	{
-	  vty_out (vty, "Can't up interface%s", VTY_NEWLINE);
-	  return CMD_WARNING;
-	}
-      if_refresh (ifp);
-
-      /* Some addresses (in particular, IPv6 addresses on Linux) get
-       * removed when the interface goes down. They need to be readded.
-       */
-      if_addr_wakeup(ifp);
+      vty_out (vty, "Can't up interface%s", VTY_NEWLINE);
+      return CMD_WARNING;
     }
+    if_data = ifp->info;
+    if_data->shutdown = IF_ZEBRA_SHUTDOWN_OFF;
+    if_refresh (ifp);
 
-  if_data = ifp->info;
-  if_data->shutdown = IF_ZEBRA_SHUTDOWN_OFF;
+    /* Some addresses (in particular, IPv6 addresses on Linux) get
+     * removed when the interface goes down. They need to be readded.
+     */
+    if_addr_wakeup(ifp);
+  }
 
   return CMD_SUCCESS;
 }
