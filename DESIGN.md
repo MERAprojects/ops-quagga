@@ -714,6 +714,12 @@ zebra/debug           event|packet|send|recv|detail|kernel|rib|ribq|fpm|all|show
 One example of using the command to set the zebra kernel debugs is :
 "ovs-appctl -t ops-zebra zebra/debug kernel"
 
+Restrictions
+------------
+
+Eventhough OpenSwitch supports configuration of more than 64000 routes, the system becomes unstable when the number of routes exceeds 64000 routes.
+So it is recommended to restrict the number of routes to not more than 64000 routes.
+
 References
 ----------
 * [Reference 1 Quagga Documents](http://www.nongnu.org/quagga)

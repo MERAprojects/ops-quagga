@@ -26,6 +26,43 @@
 #ifndef BGP_OVSDB_IF_H
 #define BGP_OVSDB_IF_H 1
 
+/* data type for memory diag-dump of bgp.
+ * TODO These two structure are duplication of hash and hash_backet structure
+ * from lib/hash.h. Should future update in lib/hash.h apply, these two structure
+ * need to be updated for accurate memory calculation */
+struct bgp_mem_hash_backet
+{
+  /* Linked list.  */
+  struct bgp_mem_hash_backet *next;
+
+  /* Hash key. */
+  unsigned int key;
+
+  /* Data.  */
+  void *data;
+};
+
+struct bgp_mem_hash
+{
+  /* Hash backet. */
+  struct bgp_mem_hash_backet **index;
+
+  /* Hash table size. Must be power of 2 */
+  unsigned int size;
+
+  /* If expansion failed. */
+  int no_expand;
+
+  /* Key make function. */
+  unsigned int (*hash_key) (void *);
+
+  /* Data compare function. */
+  int (*hash_cmp) (const void *, const void *);
+
+  /* Backet alloc. */
+  unsigned long count;
+};
+
 /* Setup zebra to connect with ovsdb and daemonize. This daemonize is used
  * over the daemonize in the main function to keep the behavior consistent
  * with the other daemons in the OpenSwitch system
@@ -52,6 +89,5 @@ void bgp_ovsdb_exit(void);
 /* Initialize and integrate the ovs poll loop with the daemon */
 void bgp_ovsdb_init_poll_loop (struct bgp_master *bm);
 boolean  get_global_ecmp_status(void);
-extern void bgp_daemon_ovsdb_neighbor_update (struct peer *peer, bool update_stats_too);
 
 #endif /* BGP_OVSDB_IF_H */

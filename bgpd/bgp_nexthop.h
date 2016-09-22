@@ -57,5 +57,7 @@ extern int bgp_config_write_scan_time (struct vty *);
 extern int bgp_nexthop_onlink (afi_t, struct attr *);
 extern int bgp_nexthop_self (struct attr *);
 extern void bgp_address_init (void);
-
+#ifdef HAVE_IPV6
+extern int bgp_multiaccess_check_ipv6 (struct in6_addr nexthop, char *peer);
+#endif
 #endif /* _QUAGGA_BGP_NEXTHOP_H */

@@ -26,6 +26,15 @@
 
 #define NL_PKT_BUF_SIZE 8192
 
+#ifdef ENABLE_OVSDB
+/* Netlink socket buffer size and receive buffer size.
+ * We need buffer twice the size of socket buffer size,
+ * allocating 4 times to be safe.
+ */
+#define NL_SOCKET_BUF_SIZE     10485760
+#define NL_RECV_BUF_SIZE       (4 * 10485760)
+#endif
+
 extern int
 addattr32 (struct nlmsghdr *n, size_t maxlen, int type, int data);
 extern int

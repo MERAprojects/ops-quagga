@@ -38,6 +38,7 @@
 #define ROUTE_TABLE         "Route"
 #define PREFIX_MAXLEN            50
 #define MAX_KEY_LEN              60
+#define NEXT_HOP         "Next_Hop"
 
 struct bgp_info;
 struct prefix;
@@ -87,6 +88,7 @@ struct lookup_hmap_element {
     enum transaction_state state;
     enum txn_op_type op_type;
     char prefix[PREFIX_MAXLEN];
+    char next_hop[PREFIX_MAXLEN];
     struct hmap_node node;
     bgp_table_type_t table_type;
 };
@@ -161,25 +163,25 @@ extern const struct ovsrec_vrf*
 bgp_ovsdb_get_vrf(struct bgp *bgp);
 
 extern const struct ovsrec_route*
-bgp_ovsdb_lookup_rib_entry(struct prefix *p);
+bgp_ovsdb_lookup_rib_entry(struct prefix *p, char *next_hop_host);
 
 extern int
 bgp_ovsdb_add_local_rib_entry(struct prefix *p, struct bgp_info *info,
                         struct bgp *bgp, safi_t safi);
 extern int
 bgp_ovsdb_withdraw_rib_entry(struct prefix *p, struct bgp_info *info,
-                             struct bgp *bgp, safi_t safi);
+                             struct bgp *bgp, safi_t safi, char *next_hop);
 extern int
 bgp_ovsdb_announce_rib_entry(struct prefix *p, struct bgp_info *info,
                              struct bgp *bgp, safi_t safi);
 extern int
 bgp_ovsdb_delete_local_rib_entry(struct prefix *p, struct bgp_info *info,
-                                 struct bgp *bgp, safi_t safi);
+                                 struct bgp *bgp, safi_t safi, char *next_hop_host);
 extern int
 bgp_ovsdb_update_local_rib_entry_attributes(struct prefix *p, struct bgp_info *info,
                                             struct bgp *bgp, safi_t safi);
 extern const struct ovsrec_bgp_route*
-bgp_ovsdb_lookup_local_rib_entry(struct prefix *p);
+bgp_ovsdb_lookup_local_rib_entry(struct prefix *p, char *next_hop_host);
 
 extern int
 bgp_ovsdb_republish_route(const struct ovsrec_bgp_router *bgp_first, int asn);
@@ -187,9 +189,8 @@ bgp_ovsdb_republish_route(const struct ovsrec_bgp_router *bgp_first, int asn);
 extern void
 bgp_txn_complete_processing(void);
 
-extern int policy_prefix_list_read_ovsdb_apply_changes(struct ovsdb_idl *idl);
-extern int policy_community_filter_read_ovsdb_apply_changes(struct ovsdb_idl *idl);
-extern int policy_rt_map_read_ovsdb_apply_changes (struct ovsdb_idl *idl);
-extern int policy_aspath_filter_read_ovsdb_apply_changes(struct ovsdb_idl *idl);
+extern bool
+bgp_lookup_global_hmap_entry(struct prefix *p, struct bgp_info *info,
+                                 struct bgp *bgp, safi_t safi);
 
 #endif /* BGP_OVSDB_RIB_H */

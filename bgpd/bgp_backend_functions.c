@@ -1515,11 +1515,13 @@ daemon_neighbor_remote_as_cmd_execute (struct bgp *bgp, char *peer_str,
       return CMD_SUCCESS;
     }
 
+#ifndef ENABLE_OVSDB
   if (peer_address_self_check(&su))
     {
       VLOG_ERR("%% Can not configure the local system as neighbor\n");
       return CMD_WARNING;
     }
+#endif /* !ENABLE_OVSDB */
 
   ret = peer_remote_as(bgp, &su, &as, afi, safi);
 

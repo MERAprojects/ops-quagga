@@ -1250,7 +1250,56 @@ bgp_multiaccess_check_v4 (struct in_addr nexthop, char *peer)
 
   return 0;
 }
+#ifdef HAVE_IPV6
+int
+bgp_multiaccess_check_ipv6 (struct in6_addr nexthop, char *peer)
+{
+    struct bgp_node *rn1;
+    struct bgp_node *rn2;
+    struct prefix p1;
+    struct prefix p2;
+    struct in6_addr addrv6;
+    int ret;
 
+    ret = inet_pton (AF_INET6, peer, &addrv6);
+
+    if (! ret) {
+        zlog_err ("Invalid peer address");
+        return 0;
+    }
+    memset (&p1, 0, sizeof (struct prefix));
+    p1.family = AF_INET6;
+    p1.prefixlen = IPV6_MAX_BITLEN;
+    p1.u.prefix6 = nexthop;
+    memset (&p2, 0, sizeof (struct prefix));
+    p2.family = AF_INET6;
+    p2.prefixlen = IPV6_MAX_BITLEN;
+    p2.u.prefix6 = addrv6;
+
+    /* If bgp scan is not enabled, return invalid. */
+    if (zlookup->sock < 0) {
+        zlog_err ("Zebra connection is down");
+        return 0;
+    }
+    rn1 = bgp_node_match (bgp_connected_table[AFI_IP6], &p1);
+    if (! rn1) {
+        zlog_err ("Next hop is not on connected route");
+        return 0;
+    }
+    bgp_unlock_node (rn1);
+    rn2 = bgp_node_match (bgp_connected_table[AFI_IP6], &p2);
+    if (! rn2) {
+        zlog_err ("Peer is not on connected route");
+        return 0;
+    }
+    bgp_unlock_node (rn2);
+
+    if (rn1 == rn2) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 DEFUN (bgp_scan_time,
        bgp_scan_time_cmd,
        "bgp scan-time <5-60>",

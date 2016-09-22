@@ -43,10 +43,12 @@
 
 #ifdef ENABLE_OVSDB
 #include "zebra/zebra_ovsdb_if.h"
+#include "zebra/rt_netlink.h"
 #endif
 
 #ifdef ENABLE_OVSDB
 extern boolean exiting;
+char *nl_recvbuf = NULL;
 #endif
 
 /* Zebra instance */
@@ -69,7 +71,11 @@ int keep_kernel_mode = 0;
 
 #ifdef HAVE_NETLINK
 /* Receive buffer size for netlink socket */
+#ifdef ENABLE_OVSDB
+u_int32_t nl_rcvbufsize = NL_SOCKET_BUF_SIZE;
+#else
 u_int32_t nl_rcvbufsize = 0;
+#endif
 #endif /* HAVE_NETLINK */
 
 /* Command line options. */
@@ -228,6 +234,18 @@ main (int argc, char **argv)
   char *zserv_path = NULL;
 
 #ifdef ENABLE_OVSDB
+  /* Allocate receive buffer to receive netlink messages.
+   * We need buffer twice the size of socket buffer size,
+   * allocating 4 times to be safe.
+   */
+  nl_recvbuf = malloc(NL_RECV_BUF_SIZE);
+  if(nl_recvbuf == NULL)
+    {
+      zlog_err("ops-zebra daemon failed to allocate netlink recvbuf: %s",
+               strerror(errno));
+      exit (1);
+    }
+
   zebra_ovsdb_init(argc, argv);
 #endif
 

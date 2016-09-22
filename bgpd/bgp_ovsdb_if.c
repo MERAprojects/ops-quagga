@@ -43,7 +43,7 @@
 #include "dummy.h"
 #include "fatal-signal.h"
 #include "poll-loop.h"
-#include "ovs/stream.h"
+#include "stream.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
@@ -66,11 +66,6 @@
 #include  <diag_dump.h>
 #include "bgpd/bgp_fsm.h"
 #include "bgp_vty.h"
-#include "bgp_backend_functions.h"
-#include "bgp_ovsdb_route.h"
-#include "bgp_zebra.h"
-#include "bgp_mpath.h"
-
 /*
  * Local structure to hold the master thread
  * and counters for read/write callbacks
@@ -81,6 +76,16 @@ typedef struct bgp_ovsdb_t_ {
     unsigned int read_cb_count;
     unsigned int write_cb_count;
 } bgp_ovsdb_t;
+
+/* BGP clear sort. */
+enum clear_sort
+{
+  clear_all,
+  clear_peer,
+  clear_group,
+  clear_external,
+  clear_as
+};
 
 static bgp_ovsdb_t glob_bgp_ovs;
 #define MAX_BUF_LEN 10
@@ -111,26 +116,6 @@ static void bgpd_dump(char *buf, int len);
 static void bgpd_diag_dump_basic_cb(const char *feature , char **buf);
 
 extern struct in_addr router_id_zebra;
-/* Prototypes */
-int
-modify_bgp_router_id_config (struct bgp *bgp_cfg,
-    const struct ovsrec_bgp_router *bgp_mod_row);
-int
-modify_bgp_network_config (struct bgp *bgp_cfg,
-    const struct ovsrec_bgp_router *bgp_mod_row);
-int
-modify_bgp_maxpaths_config (struct bgp *bgp_cfg,
-    const struct ovsrec_bgp_router *bgp_mod_row);
-int
-modify_bgp_timers_config (struct bgp *bgp_cfg,
-    const struct ovsrec_bgp_router *bgp_mod_row);
-int
-bgp_static_route_addition (struct bgp *bgp_cfg,
-    const struct ovsrec_bgp_router *bgp_mod_row);
-int
-bgp_static_route_deletion (struct bgp *bgp_cfg,
-                           const struct ovsrec_bgp_router *bgp_mod_row);
-
 /*
  * ovs appctl dump function for this daemon
  * This is useful for debugging
@@ -191,7 +176,7 @@ bgp_update_active_router_id (const struct ovsrec_bgp_router *bgp_router_row,
     for (ALL_LIST_ELEMENTS (bgpmaster->bgp, node, nnode, bgp)){
         if (bgp->router_id_static.s_addr == 0){
             bgp_router_id_set (bgp, &active_router_id_prefix.u.prefix4);
-            VLOG_INFO("Setting active_router_id for BGP ASN: %d", bgp->as);
+            VLOG_DBG("Setting active_router_id for BGP ASN: %d", bgp->as);
             break;
         }
     }
@@ -557,13 +542,13 @@ bgp_dump_memory (struct ds *ds)
         ds_put_format (ds, "%ld hash tables, using %s of memory\n",
                        count,
                        mtype_memstr (memstrbuf, sizeof (memstrbuf),
-                                     count * sizeof (struct hash)));
+                                     count * sizeof (struct bgp_mem_hash)));
     count = mtype_stats_alloc (MTYPE_HASH_BACKET);
     if (count > 0)
         ds_put_format (ds, "%ld hash buckets, using %s of memory\n",
                        count,
                        mtype_memstr (memstrbuf, sizeof (memstrbuf),
-                                     count * sizeof (struct hash_backet)));
+                                     count * sizeof (struct bgp_mem_hash_backet)));
     ds_put_format (ds, "\n");
 }
 
@@ -1272,7 +1257,6 @@ bgp_apply_global_changes (void)
             }
         }
     }
-
     if (sys) {
         /* Update the hostname */
         bgp_set_hostname(sys->hostname);
@@ -1305,6 +1289,37 @@ delete_bgp_router_config (struct ovsdb_idl *idl)
         }
     }
 }
+static void
+delete_redistribute_rmap(struct ovsdb_idl *idl,
+                           const struct ovsrec_bgp_router *bgp_mod_row,
+                           struct bgp *bgp, int afi, int type)
+{
+    bool match_found = false;
+    int i, ret = 0;
+    if (bgp->redist[afi][type] && type != ZEBRA_ROUTE_BGP) {
+        OVSREC_BGP_ROUTER_FOR_EACH(bgp_mod_row, idl) {
+            for (i=0; i< bgp_mod_row->n_redistribute_route_map; i++) {
+                if (strcmp(bgp_mod_row->key_redistribute_route_map[i],
+                           zebra_route_string(type)) ==0 &&
+                    strcmp(bgp_mod_row->value_redistribute_route_map[i]->name,
+                           bgp->rmap[afi][type].name) == 0) {
+                    match_found = true;
+                    break;
+                }
+            }
+            if (match_found == true) {
+                break;
+            }
+        }
+        if ( match_found == false && bgp->rmap[afi][type].name) {
+            ret = bgp_redistribute_unset (bgp, afi, type);
+            if (!ret) {
+                VLOG_DBG("Deleted redistribute %s",
+                          zebra_route_string(type));
+            }
+        }
+    }
+}
 
 void
 delete_redistribute_rmap_config(struct ovsdb_idl *idl,
@@ -1312,36 +1327,44 @@ delete_redistribute_rmap_config(struct ovsdb_idl *idl,
                            struct bgp *bgp)
 {
     const struct ovsrec_bgp_router *ovs_first;
-    int i,j,type;
+    int j, afi_type;
     int ret = 0;
-    bool match_found = false;
     for (j = 0; j < ZEBRA_ROUTE_MAX; j++) {
-        match_found = false;
-        if (bgp->redist[AFI_IP][j] && j != ZEBRA_ROUTE_BGP) {
-            OVSREC_BGP_ROUTER_FOR_EACH(bgp_mod_row, idl) {
-                for (i=0; i< bgp_mod_row->n_redistribute_route_map; i++) {
-                    if (strcmp(bgp_mod_row->key_redistribute_route_map[i],
-                               zebra_route_string(j)) ==0 &&
-                        strcmp(bgp_mod_row->value_redistribute_route_map[i]->name,
-                               bgp->rmap[AFI_IP][j].name) == 0) {
-                        match_found = true;
-                        break;
-                    }
-                }
-                if (match_found == true) {
+        for (afi_type = AFI_IP; afi_type < AFI_MAX; afi_type++) {
+            delete_redistribute_rmap(idl, bgp_mod_row, bgp, afi_type, j);
+        }
+    }
+}
+
+static void
+delete_redistribute(struct ovsdb_idl *idl,
+                           const struct ovsrec_bgp_router *bgp_mod_row,
+                           struct bgp *bgp, int afi, int type)
+{
+    bool match_found = false;
+    int i, ret = 0;
+    if (bgp->redist[afi][type] && type != ZEBRA_ROUTE_BGP) {
+        OVSREC_BGP_ROUTER_FOR_EACH(bgp_mod_row, idl) {
+            for (i=0; i< bgp_mod_row->n_redistribute; i++) {
+                if (strcmp(bgp_mod_row->redistribute[i],
+                           zebra_route_string(type)) == 0 &&
+                    bgp->rmap[afi][type].name == NULL)  {
+                    match_found = true;
                     break;
                 }
             }
-            if ( match_found == false && bgp->rmap[AFI_IP][j].name) {
-                    ret = bgp_redistribute_unset (bgp, AFI_IP, j);
-                    if (!ret) {
-                        VLOG_DBG("Deleted redistribute %s",
-                                  zebra_route_string(j));
-                    }
+            if (match_found == true) {
+                break;
+            }
+        }
+        if ( match_found == false  && bgp->rmap[afi][type].name == NULL) {
+            ret = bgp_redistribute_unset (bgp, afi, type);
+            if (!ret) {
+                VLOG_DBG("Deleted redistribute %s",
+                         zebra_route_string(type));
             }
         }
     }
-    return;
 }
 
 void
@@ -1350,44 +1373,21 @@ delete_redistribute_config(struct ovsdb_idl *idl,
                            struct bgp *bgp)
 {
     const struct ovsrec_bgp_router *ovs_first;
-    int i,j,type;
+    int j, afi_type;
     int ret = 0;
-    bool match_found = false;
     for (j = 0; j < ZEBRA_ROUTE_MAX; j++) {
-        match_found = false;
-        if (bgp->redist[AFI_IP][j] && j != ZEBRA_ROUTE_BGP) {
-            OVSREC_BGP_ROUTER_FOR_EACH(bgp_mod_row, idl) {
-                for (i=0; i< bgp_mod_row->n_redistribute; i++) {
-                    if (strcmp(bgp_mod_row->redistribute[i],
-                               zebra_route_string(j)) == 0 &&
-                        bgp->rmap[AFI_IP][j].name == NULL)  {
-                        match_found = true;
-                        break;
-                    }
-                }
-                if (match_found == true) {
-                    break;
-                }
-            }
-            if ( match_found == false  && bgp->rmap[AFI_IP][j].name == NULL) {
-                    ret = bgp_redistribute_unset (bgp, AFI_IP, j);
-                    if (!ret) {
-                        VLOG_DBG("Deleted redistribute %s",
-                                  zebra_route_string(j));
-                    }
-            }
+        for (afi_type = AFI_IP; afi_type < AFI_MAX; afi_type++) {
+            delete_redistribute(idl, bgp_mod_row, bgp, afi_type, j);
         }
     }
-    return;
 }
-
 
 void
 modify_bgp_redistribute_rmap_config(struct ovsdb_idl *idl,struct bgp *bgp_cfg,
     const struct ovsrec_bgp_router *bgp_mod_row)
 {
     int i=0;
-    int type;
+    int type, afi_type;
     int rmap;
     int ret_status = -1;
 
@@ -1403,14 +1403,15 @@ modify_bgp_redistribute_rmap_config(struct ovsdb_idl *idl,struct bgp *bgp_cfg,
                 VLOG_DBG("Invalid route type");
                 continue;
             }
-
-            rmap=bgp_redistribute_rmap_set (bgp_cfg, AFI_IP, type,
+            for (afi_type = AFI_IP; afi_type < AFI_MAX; afi_type++) {
+                rmap = bgp_redistribute_rmap_set (bgp_cfg, afi_type, type,
                                   bgp_mod_row->value_redistribute_route_map[i]->name);
-            ret_status = bgp_redistribute_set(bgp_cfg, AFI_IP, type);
-            if (!rmap && !ret_status) {
-                VLOG_DBG("redistribute %s route-map %s is set",
+                ret_status = bgp_redistribute_set(bgp_cfg, afi_type, type);
+                if (!rmap && !ret_status) {
+                    VLOG_DBG("Redistribute %s route-map %s is set",
                           bgp_mod_row->key_redistribute_route_map[i],
                           bgp_mod_row->value_redistribute_route_map[i]->name);
+                }
             }
         }
     }
@@ -1421,7 +1422,7 @@ modify_bgp_redistribute_config(struct ovsdb_idl *idl,struct bgp *bgp_cfg,
     const struct ovsrec_bgp_router *bgp_mod_row)
 {
     int i=0;
-    int type;
+    int type, afi_type;
     int ret_status = -1;
 
     /* Handle redistribute deletions. */
@@ -1436,10 +1437,12 @@ modify_bgp_redistribute_config(struct ovsdb_idl *idl,struct bgp *bgp_cfg,
                 VLOG_DBG("Invalid route type");
                 continue;
             }
-            ret_status = bgp_redistribute_set(bgp_cfg, AFI_IP, type);
-            if (!ret_status) {
-                VLOG_DBG("redistribute %s is set",
-                          bgp_mod_row->redistribute[i]);
+            for (afi_type = AFI_IP; afi_type < AFI_MAX; afi_type++) {
+                ret_status = bgp_redistribute_set(bgp_cfg, afi_type, type);
+                if (!ret_status) {
+                   VLOG_DBG("Redistribute %s is set, afi %d",
+                             bgp_mod_row->redistribute[i], afi_type);
+                }
             }
         }
     }
@@ -1968,7 +1971,7 @@ get_bgp_neighbor_with_VrfName_BgpRouterAsn_Ipaddr (struct ovsdb_idl *idl,
     const struct ovsrec_bgp_router *ovs_bgp;
 
     if (NULL == vrf_name) {
-	vrf_name = DEFAULT_VRF_NAME;
+        vrf_name = DEFAULT_VRF_NAME;
     }
 
     OVSREC_VRF_FOR_EACH(ovs_vrf, idl) {
@@ -2011,7 +2014,7 @@ bgp_daemon_ovsdb_neighbor_statistics_update (bool start_new_db_txn,
     struct peer *peer)
 {
 
-#define MAX_BGP_NEIGHBOR_STATS		64
+#define MAX_BGP_NEIGHBOR_STATS                64
 
     struct ovsdb_idl_txn *db_txn;
     char *keywords[MAX_BGP_NEIGHBOR_STATS];
@@ -2034,10 +2037,14 @@ bgp_daemon_ovsdb_neighbor_statistics_update (bool start_new_db_txn,
 
     /* is this an independent txn or piggybacked onto another txn */
     if (start_new_db_txn) {
+
+        bgp_txn_finish();
+
         db_txn = ovsdb_idl_txn_create(idl);
+        VLOG_DBG("%s: created txn %p", __FUNCTION__, db_txn);
         if (NULL == db_txn) {
             VLOG_ERR("%%ovsdb_idl_txn_create failed in "
-            "bgp_daemon_ovsdb_neighbor_statistics_update\n");
+                "bgp_daemon_ovsdb_neighbor_statistics_update\n");
             return;
         }
     }
@@ -2067,6 +2074,7 @@ bgp_daemon_ovsdb_neighbor_statistics_update (bool start_new_db_txn,
 	keywords, values, count);
 
     if (start_new_db_txn) {
+        VLOG_DBG("%s: commit txn %p", __FUNCTION__, db_txn);
         status = ovsdb_idl_txn_commit(db_txn);
         ovsdb_idl_txn_destroy(db_txn);
         VLOG_DBG("%s OVSDB Neighbour statistics update transaction status is %s",
@@ -2085,6 +2093,7 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
     struct ovsdb_idl_txn *db_txn;
     enum ovsdb_idl_txn_status status;
     struct smap smap;
+    int64_t peer_weight;
 
     ovs_bgp_neighbor_ptr = get_bgp_neighbor_db_row(peer);
     if (NULL == ovs_bgp_neighbor_ptr) {
@@ -2097,17 +2106,20 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
            ovsdb_nbr_from_row_to_peer_name(idl, ovs_bgp_neighbor_ptr, NULL),
            *ovs_bgp_neighbor_ptr->remote_as);
 
+    bgp_txn_finish();
+
     db_txn = ovsdb_idl_txn_create(idl);
+    VLOG_DBG("%s: created txn %p", __FUNCTION__, db_txn);
     if (NULL == db_txn) {
-	VLOG_ERR("%%ovsdb_idl_txn_create failed in "
-	    "bgp_daemon_ovsdb_neighbor_update\n");
-	return;
+        VLOG_ERR("%%ovsdb_idl_txn_create failed in "
+            "bgp_daemon_ovsdb_neighbor_update\n");
+        return;
     }
 
     /* update fields of this peer/neighbor in the ovsdb */
 
     if (peer->group) {
-	/* TO DO LATER */
+        /* TO DO LATER */
     }
 
     VLOG_DBG("updating port to %d\n", peer->port);
@@ -2123,22 +2135,24 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
      */
 
     VLOG_DBG("updating weight to %d\n", peer->weight);
+    peer_weight = peer->weight;
     ovsrec_bgp_neighbor_set_weight(ovs_bgp_neighbor_ptr,
-        (int64_t*) &peer->weight, 1);
+        &peer_weight, 1);
 
     smap_init(&smap);
     smap_add(&smap, BGP_PEER_STATE, bgp_peer_status_to_string(peer->status));
     VLOG_DBG("updating bgp neighbor status to %s\n",
-	bgp_peer_status_to_string(peer->status));
+        bgp_peer_status_to_string(peer->status));
     ovsrec_bgp_neighbor_set_status(ovs_bgp_neighbor_ptr, &smap);
 
     /* update statistics */
     if (update_stats_too) {
-	bgp_daemon_ovsdb_neighbor_statistics_update(false,
-	    ovs_bgp_neighbor_ptr, peer);
-	VLOG_DBG("updated stats also\n");
+        bgp_daemon_ovsdb_neighbor_statistics_update(false,
+            ovs_bgp_neighbor_ptr, peer);
+        VLOG_DBG("updated stats also\n");
     }
 
+    VLOG_DBG("%s: commit txn %p", __FUNCTION__, db_txn);
     status = ovsdb_idl_txn_commit(db_txn);
     VLOG_DBG("%s OVSDB Neighbour update status is %s", __FUNCTION__,
                     ovsdb_idl_txn_status_to_string(status));
@@ -2169,7 +2183,7 @@ bgp_nbr_remote_as_ovsdb_apply_changes (const struct ovsrec_bgp_neighbor *ovs_nbr
     if (COL_CHANGED(ovs_nbr, ovsrec_bgp_neighbor_col_remote_as, idl_seqno)) {
         VLOG_DBG("Setting remote-as %lld", *ovs_nbr->remote_as);
         daemon_neighbor_remote_as_cmd_execute(bgp_instance,
-            name, (as_t *)ovs_nbr->remote_as, AFI_IP, SAFI_UNICAST);
+            name, ovs_nbr->remote_as, AFI_IP, SAFI_UNICAST);
     }
 }
 
@@ -2332,7 +2346,7 @@ bgp_nbr_timers_ovsdb_apply_changes(const struct ovsrec_bgp_neighbor *ovs_nbr,
          * timer values are not required/used in unsetting case. Only in
          * set case do we check for valid keepalive and hold timer values.
          */
-        if (!set || ((keepalive >= 0) && (holdtimer >= 0))) {
+        if (!set || ((keepalive > 0) && (holdtimer > 0))) {
             daemon_neighbor_timers_cmd_execute(bgp_instance, name,
                                                (u_int32_t)keepalive,
                                                (u_int32_t)holdtimer, set);
@@ -2422,12 +2436,12 @@ get_bgp_neighbor_context (struct ovsdb_idl *idl,
     const struct ovsrec_bgp_router *ovs_bgp = NULL;
 
     if (!name) {
-        VLOG_INFO("Peer name is null for neighbor context\n");
+        VLOG_ERR("Peer name is null for neighbor context\n");
         return NULL;
     }
 
     if (!idl) {
-        VLOG_INFO("IDL instance for getting neighbor context is NULL\n");
+        VLOG_ERR("IDL instance for getting neighbor context is NULL\n");
         return NULL;
     }
 
@@ -2460,28 +2474,28 @@ bgp_check_neighbor_clear_soft_in (struct ovsdb_idl *idl,
     int req_cnt, perf_cnt;
 
     if (!idl) {
-        VLOG_INFO("IDL instance for updating clear counters for"
+        VLOG_ERR("IDL instance for updating clear counters for"
              "clear bgp neighbor soft in commands is NULL\n");
         return false;
     }
 
     if (!neighbor_row) {
-        VLOG_INFO("Neighbor instance for updating clear counters for"
+        VLOG_ERR("Neighbor instance for updating clear counters for"
              "clear bgp neighbor soft in commands is NULL\n");
         return false;
     }
 
     if (!name) {
-        VLOG_INFO("Peer name updating clear counters for"
+        VLOG_ERR("Peer name updating clear counters for"
              "clear bgp neighbor soft in commands is NULL\n");
         return false;
     }
 
     if (object_is_peer_group(neighbor_row)) {
-        VLOG_INFO("Updating clear counters for peer soft in"
+        VLOG_DBG("Updating clear counters for peer soft in"
                   "clear request for PEER-GROUP %s\n", name?name:"NA");
     } else {
-        VLOG_INFO("Updating clear counters for peer soft in"
+        VLOG_DBG("Updating clear counters for peer soft in"
                   "clear request for PEER %s\n", name?name:"NA");
     }
 
@@ -2490,7 +2504,7 @@ bgp_check_neighbor_clear_soft_in (struct ovsdb_idl *idl,
     clear_bgp_neighbor_table_performed = smap_get_int(&neighbor_row->status,
         OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_IN_PERFORMED, 0);
 
-    VLOG_INFO("request count %d, performed count %d\n",
+    VLOG_DBG("request count %d, performed count %d\n",
                clear_bgp_neighbor_table_requested,
                clear_bgp_neighbor_table_performed);
 
@@ -2513,7 +2527,7 @@ bgp_check_neighbor_clear_soft_in (struct ovsdb_idl *idl,
 
         ovs_neighbor = get_bgp_neighbor_context(idl, name);
         if (ovs_neighbor) {
-            VLOG_INFO("Adding smap\n");
+            VLOG_DBG("Adding smap\n");
             smap_init(&smap_status);
             smap_add(&smap_status,
                      OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_IN_PERFORMED,
@@ -2533,17 +2547,17 @@ bgp_check_neighbor_clear_soft_in (struct ovsdb_idl *idl,
                 OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_IN_PERFORMED,
                 0);
 
-            VLOG_INFO("Requested count %d, performed count %d\n",
+            VLOG_DBG("Requested count %d, performed count %d\n",
                       req_cnt, perf_cnt);
 
-            VLOG_INFO("Done with clear op for bgp peer soft in"
+            VLOG_DBG("Done with clear op for bgp peer soft in"
                       "requested count %d, performed count %d\n",
                       clear_bgp_neighbor_table_requested,
                       clear_bgp_neighbor_table_performed);
 
             smap_destroy(&smap_status);
         } else {
-            VLOG_INFO("BGP neighbor row is NULL for smap set operation\n");
+            VLOG_DBG("BGP neighbor row is NULL for smap set operation\n");
         }
     }
     return true;
@@ -2569,28 +2583,28 @@ bgp_check_neighbor_clear_soft_out (struct ovsdb_idl *idl,
     int req_cnt, perf_cnt;
 
     if (!idl) {
-        VLOG_INFO("IDL instance for updating clear counters for"
+        VLOG_ERR("IDL instance for updating clear counters for"
              "clear bgp neighbor soft out commands is NULL\n");
         return false;
     }
 
     if (!neighbor_row) {
-        VLOG_INFO("Neighbor instance for updating clear counters for"
+        VLOG_ERR("Neighbor instance for updating clear counters for"
              "clear bgp neighbor soft out commands is NULL\n");
         return false;
     }
 
     if (!name) {
-        VLOG_INFO("Peer name updating clear counters for"
+        VLOG_ERR("Peer name updating clear counters for"
              "clear bgp neighbor soft out commands is NULL\n");
         return false;
     }
 
     if (object_is_peer_group(neighbor_row)) {
-        VLOG_INFO("Updating clear counters for peer soft out"
+        VLOG_DBG("Updating clear counters for peer soft out"
                   "clear request for PEER-GROUP %s\n", name?name:"NA");
     } else {
-        VLOG_INFO("Updating clear counters for peer soft out"
+        VLOG_DBG("Updating clear counters for peer soft out"
                   "clear request for PEER %s\n", name?name:"NA");
     }
 
@@ -2599,7 +2613,7 @@ bgp_check_neighbor_clear_soft_out (struct ovsdb_idl *idl,
     clear_bgp_neighbor_table_performed = smap_get_int(&neighbor_row->status,
         OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_OUT_PERFORMED, 0);
 
-    VLOG_INFO("request count %d, performed count %d\n",
+    VLOG_DBG("request count %d, performed count %d\n",
                clear_bgp_neighbor_table_requested,
                clear_bgp_neighbor_table_performed);
 
@@ -2624,7 +2638,7 @@ bgp_check_neighbor_clear_soft_out (struct ovsdb_idl *idl,
          */
         ovs_neighbor = get_bgp_neighbor_context(idl, name);
         if (ovs_neighbor) {
-            VLOG_INFO("Adding smap\n");
+            VLOG_DBG("Adding smap\n");
             smap_init(&smap_status);
             smap_add(&smap_status,
                      OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_OUT_PERFORMED,
@@ -2644,17 +2658,17 @@ bgp_check_neighbor_clear_soft_out (struct ovsdb_idl *idl,
                 OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_OUT_PERFORMED,
                 0);
 
-            VLOG_INFO("Requested count %d, performed count %d\n",
+            VLOG_DBG("Requested count %d, performed count %d\n",
                       req_cnt, perf_cnt);
 
-            VLOG_INFO("Done with clear op for bgp peer soft out"
+            VLOG_DBG("Done with clear op for bgp peer soft out"
                       "requested count %d, performed count %d\n",
                       clear_bgp_neighbor_table_requested,
                       clear_bgp_neighbor_table_performed);
 
             smap_destroy(&smap_status);
         } else {
-            VLOG_INFO("BGP neighbor row is NULL for smap set operation\n");
+            VLOG_DBG("BGP neighbor row is NULL for smap set operation\n");
         }
     }
     return true;
@@ -2714,7 +2728,7 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
                         VLOG_DBG("Creating a peer with remote-as %d",
                                  *ovs_nbr->remote_as);
                         daemon_neighbor_remote_as_cmd_execute(bgp_instance,
-                            ovs_bgp->key_bgp_neighbors[j], (as_t *) ovs_nbr->remote_as,
+                            ovs_bgp->key_bgp_neighbors[j], ovs_nbr->remote_as,
                             AFI_IP, SAFI_UNICAST);
                     } else {
                         VLOG_ERR("Invalid remote-as for peer creation.");
@@ -2732,12 +2746,16 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
             if (!confirm_txn) {
                 VLOG_DBG("Check here for clear counters for neighbor %s\n"
                          ,ovs_bgp->key_bgp_neighbors[j]);
+
+                bgp_txn_finish();
+
                 confirm_txn = ovsdb_idl_txn_create(idl);
+                VLOG_DBG("%s: created txn %p", __FUNCTION__, confirm_txn);
                 bgp_check_neighbor_clear_soft_in(idl, ovs_nbr,
                                                  ovs_bgp->key_bgp_neighbors[j]);
                 bgp_check_neighbor_clear_soft_out(idl, ovs_nbr,
                                                  ovs_bgp->key_bgp_neighbors[j]);
-
+                VLOG_DBG("%s: commit block txn %p", __FUNCTION__, confirm_txn);
                 status = ovsdb_idl_txn_commit_block(confirm_txn);
                 ovsdb_idl_txn_destroy(confirm_txn);
                 VLOG_DBG("Neighbor clear operation txn result: %s\n",
@@ -2762,13 +2780,13 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
                     OVSDB_BGP_NEIGHBOR_CLEAR_COUNTERS_SOFT_OUT_PERFORMED,
                     0);
 
-                VLOG_INFO("After neighbor clear operation txn commit:"
+                VLOG_DBG("After neighbor clear operation txn commit:"
                           " soft in requested count %d, performed count %d;"
                           " soft out requested count %d, performed count %d\n",
                           req_cnt_in, perf_cnt_in, req_cnt_out, perf_cnt_out);
             }
 
-	    /* remote-as */
+            /* remote-as */
             bgp_nbr_remote_as_ovsdb_apply_changes(ovs_nbr,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
@@ -2776,11 +2794,11 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
             bgp_nbr_peer_group_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* description */
+            /* description */
             bgp_nbr_description_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* passwd */
+            /* passwd */
             bgp_nbr_password_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
@@ -2788,11 +2806,11 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
             bgp_nbr_shutdown_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* inbound_soft_reconfiguration */
+            /* inbound_soft_reconfiguration */
             bgp_nbr_inbound_soft_reconfig_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* route map */
+            /* route map */
             bgp_nbr_route_map_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
@@ -2804,11 +2822,11 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
             bgp_nbr_aspath_filter_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* timers */
+            /* timers */
             bgp_nbr_timers_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* allow_as_in */
+            /* allow_as_in */
             bgp_nbr_allow_as_in_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
@@ -2820,15 +2838,15 @@ bgp_nbr_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
             bgp_nbr_advertisement_interval_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* ebgp_multihop */
+            /* ebgp_multihop */
             bgp_nbr_ebgp_multihop_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* ttl_security_hops */
+            /* ttl_security_hops */
             bgp_nbr_ttl_security_hops_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
-	    /* update_source */
+            /* update_source */
             bgp_nbr_update_source_ovsdb_apply_changes(ovs_nbr, ovs_bgp,
                 ovs_bgp->key_bgp_neighbors[j], bgp_instance);
 
@@ -2863,17 +2881,17 @@ bgp_apply_bgp_neighbor_changes (struct ovsdb_idl *idl)
      * it follows that modified or inserted can NOT be true.
      */
     if (!ovs_nbr) {
-	deleted = true;
+        deleted = true;
     } else {
-	if (ANY_ROW_DELETED(ovs_nbr, idl_seqno)) {
-	    deleted = true;
-	}
-	if (ANY_NEW_ROW(ovs_nbr, idl_seqno)) {
-	    inserted = true;
-	}
-	if (ANY_ROW_CHANGED(ovs_nbr, idl_seqno)) {
-	    modified = true;
-	}
+        if (ANY_ROW_DELETED(ovs_nbr, idl_seqno)) {
+            deleted = true;
+        }
+        if (ANY_NEW_ROW(ovs_nbr, idl_seqno)) {
+            inserted = true;
+        }
+        if (ANY_ROW_CHANGED(ovs_nbr, idl_seqno)) {
+            modified = true;
+        }
     }
 
     /* deletions are handled differently, do them first */
@@ -2884,8 +2902,8 @@ bgp_apply_bgp_neighbor_changes (struct ovsdb_idl *idl)
 
     /* nothing else changed ? */
     if (!modified && !inserted) {
-	VLOG_DBG("no other changes occured in BGP Neighbor table\n");
-	return;
+        VLOG_DBG("no other changes occured in BGP Neighbor table\n");
+        return;
     }
 
     VLOG_DBG("now processing bgp neighbor modifications\n");
@@ -2919,6 +2937,9 @@ bgp_reconfigure (struct ovsdb_idl *idl)
     /* Scan active route transaction list and handle completions */
     bgp_txn_complete_processing();
 
+    /* finish any uncommited transactions */
+    bgp_txn_finish();
+
     /* update the seq. number */
     idl_seqno = new_idl_seqno;
 }
@@ -2928,6 +2949,8 @@ bgp_reconfigure (struct ovsdb_idl *idl)
 static void
 bgp_ovs_run ()
 {
+    bgp_txn_finish();
+
     ovsdb_idl_run(idl);
     unixctl_server_run(appctl);
 
@@ -2976,6 +2999,7 @@ bovs_cb (struct thread *thread)
         return -1;
     }
 
+    bgp_txn_finish();
     bgp_ovs_clear_fds();
     bgp_ovs_run();
     bgp_ovs_wait();

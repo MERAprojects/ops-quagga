@@ -703,7 +703,6 @@ funcname_thread_add_read (struct thread_master *m,
 
   if (FD_ISSET (fd, &m->readfd))
     {
-      zlog (NULL, LOG_WARNING, "There is already read fd [%d]", fd);
       return NULL;
     }
 
@@ -727,7 +726,6 @@ funcname_thread_add_write (struct thread_master *m,
 
   if (FD_ISSET (fd, &m->writefd))
     {
-      zlog (NULL, LOG_WARNING, "There is already write fd [%d]", fd);
       return NULL;
     }
 

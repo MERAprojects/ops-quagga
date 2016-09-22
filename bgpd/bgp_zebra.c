@@ -954,7 +954,7 @@ bgp_zebra_withdraw (struct prefix *p, struct bgp_info *info, safi_t safi)
     }
 #endif /* HAVE_IPV6 */
 #else
-  bgp_ovsdb_withdraw_rib_entry(p, info, info->peer->bgp, safi);
+  bgp_ovsdb_withdraw_rib_entry(p, info, info->peer->bgp, safi, info->peer->host);
 #endif
 }
 
@@ -1032,16 +1032,16 @@ bgp_redistribute_unset (struct bgp *bgp, afi_t afi, int type)
   /* Unset metric. */
   bgp->redist_metric_flag[afi][type] = 0;
   bgp->redist_metric[afi][type] = 0;
-
-  /* Return if zebra connection is disabled. */
-  if (! zclient->redist[type])
-    return CMD_WARNING;
-  zclient->redist[type] = 0;
-
-  if (bgp->redist[AFI_IP][type] == 0 
-      && bgp->redist[AFI_IP6][type] == 0 
+  /*
+   * Redistribute setting is for both IPV4 and IPV6
+   * Need to send the redistribute setting to zebra only once
+   * However, bgp_redistribute_withdraw (bgp, afi, type) needs
+   * to be called separately for each afi for bgp routes to be removed
+   */
+  if (zclient->redist[type] && bgp->redist[afi][type] == 0
       && zclient->sock >= 0)
-    {
+  {
+      zclient->redist[type] = 0;
       /* Send distribute delete message to zebra. */
       if (BGP_DEBUG(zebra, ZEBRA))
 	zlog_debug("Zebra send: redistribute delete %s",
