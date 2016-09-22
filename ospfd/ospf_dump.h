@@ -108,22 +108,6 @@
 struct stream;
 #endif /* ORIGINAL_CODING */
 
-#ifdef ENABLE_OVSDB
-/*Macro for strings*/
-#define PACKET_STR        "packet"
-#define ISM_STR           "ism"
-#define LSA_STR           "lsa"
-#define NSM_STR           "nsm"
-#define NSSA_STR          "nssa"
-#define EVENT_STR         "event"
-#define INTF_STR          "interface"
-#define REDST_STR         "redistribute"
-
-#define BUF_LEN 16000
-#define REM_BUF_LEN (buflen - 1 - strlen(buf))
-#define MAX_ERR_STR_LEN 255
-#endif
-
 #define AREA_NAME(A)    ospf_area_name_string ((A))
 #define IF_NAME(I)      ospf_if_name_string ((I))
 
@@ -153,17 +137,6 @@ extern void ospf_ip_header_dump (struct ip *);
 extern void ospf_packet_dump (struct stream *);
 extern void ospf_lsa_header_dump (struct lsa_header *);
 extern void debug_init (void);
-
-#ifdef ENABLE_OVSDB
-extern int
-ospf_debug(char *buf, char* err_str, int argc, const char *argv[]);
-
-extern int
-ospf_no_debug(char *buf, char* err_str, int argc, const char *argv[]);
-
-void
-show_debug_info(char *buf, int buflen);
-#endif
 
 /* Appropriate buffer size to use with ospf_timer_dump and ospf_timeval_dump: */
 #define OSPF_TIME_DUMP_SIZE	16

@@ -74,12 +74,5 @@ extern int ospf_distance_unset (struct vty *, struct ospf *, const char *,
 				const char *, const char *);
 extern void ospf_zebra_init (void);
 
-#ifdef ENABLE_OVSDB
-struct ovsrec_port;
-struct ovsdb_idl;
-int ospf_interface_add (struct ospf *, struct interface *);
-int ospf_interface_state_up (struct ovsdb_idl *, const struct ovsrec_port *,
-                             struct interface *);
-#endif /* ENABLE_OVSDB */
-
 #endif /* _ZEBRA_OSPF_ZEBRA_H */
+

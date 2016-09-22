@@ -50,8 +50,7 @@
 #endif /* HAVE_SNMP */
 
 #ifdef ENABLE_OVSDB
-extern void
-if_set_value_from_ovsdb (struct ovsdb_idl *, const struct ovsrec_port *, struct interface *);
+#include "ospfd/ospf_ovsdb_if.h"
 #endif
 
 /* Zebra structure to hold current status. */
@@ -61,7 +60,6 @@ struct zclient *zclient = NULL;
 extern struct thread_master *master;
 struct in_addr router_id_zebra;
 
-#ifndef ENABLE_OVSDB
 /* Router-id update message from zebra. */
 static int
 ospf_router_id_update_zebra (int command, struct zclient *zclient,
@@ -329,206 +327,6 @@ ospf_interface_address_delete (int command, struct zclient *zclient,
 
   return 0;
 }
-
-#else /* ENABLE_OVSDB */
-
-int
-ospf_interface_add (struct ospf *ospf, struct interface *ifp)
-{
-  if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-    zlog_debug ("Zebra: interface add %s index %d flags %llx metric %d mtu %d",
-               ifp->name, ifp->ifindex, (unsigned long long)ifp->flags,
-               ifp->metric, ifp->mtu);
-
-  assert (ifp->info);
-
-  if (!OSPF_IF_PARAM_CONFIGURED (IF_DEF_PARAMS (ifp), type))
-    {
-      SET_IF_PARAM (IF_DEF_PARAMS (ifp), type);
-      IF_DEF_PARAMS (ifp)->type = ospf_default_iftype(ifp);
-    }
-
-  ospf_if_update (ospf, ifp);
-
-#ifdef HAVE_SNMP
-  ospf_snmp_if_update (ifp);
-#endif /* HAVE_SNMP */
-  if_dump_all();
-  return 0;
-}
-
-int
-ospf_interface_delete (struct ospf *ospf __attribute__((__unused__)), struct interface *ifp)
-{
-  struct route_node *rn;
-
-  if (ifp == NULL)
-    return 0;
-
-  if (if_is_up (ifp))
-    zlog_warn ("Zebra: got delete of %s, but interface is still up",
-               ifp->name);
-
-  if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-    zlog_debug ("Zebra: interface delete %s index %d flags %llx metric %d mtu %d",
-       ifp->name, ifp->ifindex, (unsigned long long)ifp->flags, ifp->metric, ifp->mtu);
-
-#ifdef HAVE_SNMP
-  ospf_snmp_if_delete (ifp);
-#endif /* HAVE_SNMP */
-
-  for (rn = route_top (IF_OIFS (ifp)); rn; rn = route_next (rn))
-    if (rn->info)
-      ospf_if_free ((struct ospf_interface *) rn->info);
-
-  ifp->ifindex = IFINDEX_INTERNAL;
-
-  return 0;
-}
-
-int
-ospf_interface_state_up (struct ovsdb_idl *idl, const struct ovsrec_port *ovs_port,
-                         struct interface *ifp)
-{
-  struct ospf_interface *oi;
-  struct route_node *rn;
-
-  /* Interface is already up. */
-  if (if_is_operative (ifp))
-    {
-      /* Temporarily keep ifp values. */
-      struct interface if_tmp;
-      memcpy (&if_tmp, ifp, sizeof (struct interface));
-
-      if_set_value_from_ovsdb (idl, ovs_port, ifp);
-
-      if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-        zlog_debug ("Zebra: Interface[%s] state update.", ifp->name);
-
-      if (if_tmp.bandwidth != ifp->bandwidth)
-        {
-          if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-            zlog_debug ("Zebra: Interface[%s] bandwidth change %d -> %d.",
-                       ifp->name, if_tmp.bandwidth, ifp->bandwidth);
-
-          ospf_if_recalculate_output_cost (ifp);
-        }
-
-      if (if_tmp.mtu != ifp->mtu)
-        {
-          if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-            zlog_debug ("Zebra: Interface[%s] MTU change %u -> %u.",
-                       ifp->name, if_tmp.mtu, ifp->mtu);
-
-	  /* Must reset the interface (simulate down/up) when MTU changes. */
-          ospf_if_reset(ifp);
-	}
-      return 0;
-    }
-
-  if_set_value_from_ovsdb (idl, ovs_port, ifp);
-
-  if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-    zlog_debug ("Zebra: Interface[%s] state change to up.", ifp->name);
-
-  for (rn = route_top (IF_OIFS (ifp)); rn; rn = route_next (rn))
-    {
-      if ((oi = rn->info) == NULL)
-        continue;
-
-      ospf_if_up (oi);
-    }
-
-  return 0;
-}
-
-int
-ospf_interface_state_down (struct ovsdb_idl *idl, const struct ovsrec_port *ovs_port,
-                         struct interface *ifp)
-{
-  struct ospf_interface *oi;
-  struct route_node *node;
-
-  if_set_value_from_ovsdb (idl, ovs_port, ifp);
-
-  if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-    zlog_debug ("Zebra: Interface[%s] state change to down.", ifp->name);
-
-  for (node = route_top (IF_OIFS (ifp)); node; node = route_next (node))
-    {
-      if ((oi = node->info) == NULL)
-        continue;
-      ospf_if_down (oi);
-    }
-
-  return 0;
-}
-
-int
-ospf_interface_address_add (struct interface *ifp, struct connected *c)
-{
-  if (c == NULL)
-    return 0;
-
-  if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-    {
-      char buf[128];
-      prefix2str(c->address, buf, sizeof(buf));
-      zlog_debug("Zebra: interface %s address add %s", c->ifp->name, buf);
-    }
-
-  ospf_if_update (NULL, c->ifp);
-
-#ifdef HAVE_SNMP
-  ospf_snmp_if_update (c->ifp);
-#endif /* HAVE_SNMP */
-
-  return 0;
-}
-
-int
-ospf_interface_address_delete (struct interface *ifp, struct connected *c)
-{
-  struct ospf_interface *oi;
-  struct route_node *rn;
-  struct prefix p;
-
-  if (c == NULL)
-    return 0;
-
-  if (IS_DEBUG_OSPF (zebra, ZEBRA_INTERFACE))
-    {
-      char buf[128];
-      prefix2str(c->address, buf, sizeof(buf));
-      zlog_debug("Zebra: interface %s address delete %s", c->ifp->name, buf);
-    }
-
-  ifp = c->ifp;
-  p = *c->address;
-  p.prefixlen = IPV4_MAX_PREFIXLEN;
-
-  rn = route_node_lookup (IF_OIFS (ifp), &p);
-  if (!rn)
-    {
-      connected_free (c);
-      return 0;
-    }
-
-  assert (rn->info);
-  oi = rn->info;
-
-  /* Call interface hook functions to clean up */
-  ospf_if_free (oi);
-
-#ifdef HAVE_SNMP
-  ospf_snmp_if_update (c->ifp);
-#endif /* HAVE_SNMP */
-
-  connected_free (c);
-
-  return 0;
-}
-#endif /* ENABLE_OVSDB */
 
 void
 ospf_zebra_add (struct prefix_ipv4 *p, struct ospf_route *or)
@@ -1029,7 +827,6 @@ ospf_routemap_unset (struct ospf *ospf, int type)
   ROUTEMAP (ospf, type) = NULL;
 }
 
-#ifndef ENABLE_OVSDB
 /* Zebra route add and delete treatment. */
 static int
 ospf_zebra_read_ipv4 (int command, struct zclient *zclient,
@@ -1135,7 +932,7 @@ ospf_zebra_read_ipv4 (int command, struct zclient *zclient,
 
   return 0;
 }
-#endif /* ENABLE_OVSDB */
+
 
 int
 ospf_distribute_list_out_set (struct ospf *ospf, int type, const char *name)
@@ -1515,7 +1312,6 @@ ospf_zebra_init ()
   /* Allocate zebra structure. */
   zclient = zclient_new ();
   zclient_init (zclient, ZEBRA_ROUTE_OSPF);
-#ifndef ENABLE_OVSDB
   zclient->router_id_update = ospf_router_id_update_zebra;
   zclient->interface_add = ospf_interface_add;
   zclient->interface_delete = ospf_interface_delete;
@@ -1530,5 +1326,4 @@ ospf_zebra_init ()
   access_list_delete_hook (ospf_filter_update);
   prefix_list_add_hook (ospf_prefix_list_update);
   prefix_list_delete_hook (ospf_prefix_list_update);
-#endif /* ENABLE_OVSDB */
 }

@@ -26,8 +26,6 @@
 
 /* For union sockunion.  */
 #include "sockunion.h"
-/* For struct stream_fifo */
-#include "stream.h"
 
 /* Typedef BGP specific types.  */
 typedef u_int32_t as_t;

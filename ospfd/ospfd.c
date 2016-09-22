@@ -207,12 +207,7 @@ ospf_new (void)
       new->dmetric[i].value = -1;
     }
   new->default_metric = -1;
-
-#ifdef ENABLE_OVSDB
-  new->ref_bandwidth = OVSDB_OSPF_DEFAULT_REF_BANDWIDTH;
-#else
   new->ref_bandwidth = OSPF_DEFAULT_REF_BANDWIDTH;
-#endif
 
   /* SPF timer value init. */
   new->spf_delay = OSPF_SPF_DELAY_DEFAULT;
@@ -765,7 +760,7 @@ ospf_area_add_if (struct ospf_area *area, struct ospf_interface *oi)
 {
   listnode_add (area->oiflist, oi);
 #ifdef ENABLE_OVSDB
-  ovsdb_area_set_interface(area->ospf->ospf_inst,area->area_id,oi);
+  ovsdb_area_set_interface(area->ospf->ospf_inst,area->area_id,oi->ifp->name);
 #endif
 }
 

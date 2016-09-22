@@ -467,7 +467,6 @@ class bgpTest(OpsVsiTest):
         self.verify_maxpaths_ecmp_enabled(True, False)
 
 
-@pytest.mark.skipif(True, reason="Skipping old tests")
 class Test_bgpd_maximum_paths:
     def setup(self):
         pass

@@ -330,7 +330,6 @@ struct ospf_area
 #define OSPF_SHORTCUT_ENABLE	1
 #define OSPF_SHORTCUT_DISABLE	2
   int shortcut_capability;              /* Other ABRs agree on S-bit */
-#define OSPF_AREA_STUB_DEFAULT_COST_DEFAULT 1
   u_int32_t default_cost;               /* StubDefaultCost. */
   int auth_type;                        /* Authentication type. */
 

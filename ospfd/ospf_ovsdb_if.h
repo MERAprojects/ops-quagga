@@ -1,5 +1,5 @@
 /* ospf daemon ovsdb integration.
- * Copyright (C) 2015-2016 Hewlett Packard Enterprise Development LP
+ * Copyright (C) 2015 Hewlett Packard Enterprise Development LP
  *
  * GNU Zebra is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -42,12 +42,6 @@
 #define OSPF_KEY_AREA_STATS_ABR_COUNT            "abr_count"
 #define OSPF_KEY_AREA_STATS_ASBR_COUNT            "asbr_count"
 
-#define OSPF_MIN_INTERVAL                   1
-#define OSPF_MIN__RETRANSMIT_INTERVAL       1
-#define OSPF_MAX_INTERVAL                   65535
-
-#define OSPF_MIN_PRIORITY                   1
-#define OSPF_MAX_PRIORITY                   255
 
 /* TODO Many of the below Macro definitions will move to a common file later point in time   */
 #define OSPF_KEY_STUB_ROUTER_STATE_ACTIVE      "stub_router_state_active"
@@ -82,36 +76,12 @@
 #define BOOLEAN_STRING_TRUE                    "true"
 
 #define MAX_PATH_STRING_LEN                    128
-#define OVSDB_OSPF_DEFAULT_REF_BANDWIDTH       (40000 * 1000)   /* kbps */
-
-/* Utils Macros */
-#define STR_EQ(s1, s2)      ((strlen((s1)) == strlen((s2))) && (!strncmp((s1), (s2), strlen((s2)))))
-
-extern u_int vlink_count;
 
 typedef struct
 {
    unsigned char lsa_type;
    char* lsa_type_str;
 }lsa_type;
-
-/* Configuration data for virtual links
- */
-struct ospf_vl_config_data {
-  char* vl_name;
-  struct in_addr area_id;       /* area ID from command line */
-  int format;                   /* command line area ID format */
-  struct in_addr vl_peer;       /* command line vl_peer */
-  int auth_type;                /* Authehntication type, if given */
-  char *auth_key;               /* simple password if present */
-  int crypto_key_id;            /* Cryptographic key ID */
-  char *md5_key;                /* MD5 authentication key */
-  int hello_interval;           /* Obvious what these are... */
-  int retransmit_interval;
-  int transmit_delay;
-  int dead_interval;
-};
-
 
 /* Setup zebra to connect with ovsdb and daemonize. This daemonize is used
  * over the daemonize in the main function to keep the behavior consistent
@@ -160,11 +130,6 @@ extern void
 ovsdb_ospf_remove_interface_from_area(int instance, struct in_addr area_id,
                                       char* ifname);
 
-/* Set the reference to the interface row to the area table. */
-extern void
-ovsdb_area_set_interface(int instance,struct in_addr area_id,
-                   struct ospf_interface* oi);
-
 extern void
 ovsdb_ospf_add_lsa (struct ospf_lsa* lsa);
 
@@ -199,9 +164,6 @@ ovsdb_ospf_update_full_nbr_count (struct ospf_neighbor* nbr,
                            uint32_t full_nbr_count);
 
 extern void
-ovsdb_ospf_update_vl_full_nbr_count (struct ospf_area*);
-
-extern void
 ovsdb_ospf_update_ifsm_state (char* ifname, int ism_state);
 
 extern void
@@ -221,11 +183,5 @@ ovsdb_ospf_update_ext_routes (const struct ospf *, const struct route_table *);
 
 extern void
 ovsdb_ospf_update_ext_route (const struct ospf *, const struct prefix *, const struct ospf_route *);
-
-void
-if_set_value_from_ovsdb (struct ovsdb_idl *, const struct ovsrec_port *, struct interface *);
-
-extern void
-ovsdb_ospf_vl_update (const struct ospf_interface*);
 
 #endif /* OSPF_OVSDB_IF_H */

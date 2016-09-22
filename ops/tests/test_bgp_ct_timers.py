@@ -111,7 +111,6 @@ class bgpTest(OpsVsiTest):
         info("### Timers unconfigured successfully ###\n")
 
 
-@pytest.mark.skipif(True, reason="Skipping old tests")
 class Test_bgpd_timers:
     def setup(self):
         pass

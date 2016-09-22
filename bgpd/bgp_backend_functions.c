@@ -68,7 +68,6 @@ Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 #include "bgpd/bgp_table.h"
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_mpath.h"
-#include "bgpd/bgp_backend_functions.h"
 
 VLOG_DEFINE_THIS_MODULE(bgp_config_commands);
 
@@ -1945,7 +1944,7 @@ daemon_no_neighbor_set_peer_group_cmd_execute (struct bgp *bgp,
     if (ret < 0)
     {
       LOG_ERROR("%% Malformed address %s", peer_str);
-      return 0;
+      return NULL;
     }
 
     peer = peer_lookup (bgp, &su);
@@ -2370,7 +2369,7 @@ peer_af_flag_modify_vty (struct vty *vty, const char *peer_str, afi_t afi,
 }
 
 static int
-peer_af_flag_modify_bgp (struct bgp *bgp, const char *peer_str, afi_t afi,
+peer_af_flag_modify_bgp (struct bgp *bgp, const char **peer_str, afi_t afi,
                          safi_t safi, u_int32_t flag, int set)
 {
     int ret;
@@ -3233,13 +3232,13 @@ int
 daemon_neighbor_ebgp_multihop_cmd_execute(struct bgp *bgp, const char *peer_str, bool is_set)
 {
   struct peer *peer;
-  int ttl = 255;
+  int64_t ttl = 255;
 
   peer = bgp_peer_and_group_lookup (bgp, peer_str);
   if(!peer) return CMD_WARNING;
 
   if(is_set) {
-    if(!peer_ebgp_multihop_set (peer, ttl))
+    if(!peer_ebgp_multihop_set (peer, &ttl))
       VLOG_DBG("%% neighbor %s ebgp-multihop set %ld\n", peer_str, ttl);
   }
   else {
@@ -4764,6 +4763,16 @@ DEFUN (exit_address_family,
     vty->node = BGP_NODE;
   return CMD_SUCCESS;
 }
+
+/* BGP clear sort. */
+enum clear_sort
+{
+  clear_all,
+  clear_peer,
+  clear_group,
+  clear_external,
+  clear_as
+};
 
 static void
 bgp_clear_vty_error (struct vty *vty, struct peer *peer, afi_t afi,

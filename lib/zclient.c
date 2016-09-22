@@ -106,10 +106,7 @@ zclient_init (struct zclient *zclient, int redist_default)
   /* Schedule first zclient connection. */
   if (zclient_debug)
     zlog_debug ("zclient start scheduled");
-#ifdef ENABLE_OVSDB
-  /* Not connecting to the zebra server in case of OSPFv2 */
-  if (redist_default != ZEBRA_ROUTE_OSPF)
-#endif /* ENABLE_OVSDB */
+
   zclient_event (ZCLIENT_SCHEDULE, zclient);
 }
 

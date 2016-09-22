@@ -21,7 +21,6 @@
 from opsvsi.docker import *
 from opsvsi.opsvsitest import *
 import time
-import pytest
 
 
 class bgpCLItest(OpsVsiTest):
@@ -335,7 +334,6 @@ class bgpCLItest(OpsVsiTest):
             info("### Test to unconfigure Route-Map match commands FAILED! ###\n")
 
 
-@pytest.mark.skipif(True, reason="Skipping old tests")
 class Test_bgpd_router_cmds:
     def setup(self):
         pass

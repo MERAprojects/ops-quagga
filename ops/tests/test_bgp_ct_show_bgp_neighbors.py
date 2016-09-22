@@ -112,7 +112,6 @@ class showBgpNeighborTest(OpsVsiTest):
         info("### Verified neighbor does not exist ###\n")
 
 
-@pytest.mark.skipif(True, reason="Skipping old tests")
 class Test_bgpd_show_bgp_neighbor:
     def setup(self):
         pass
