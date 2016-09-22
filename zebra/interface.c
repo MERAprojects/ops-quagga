@@ -1103,6 +1103,8 @@ DEFUN (shutdown_if,
   struct zebra_if *if_data;
 
   ifp = (struct interface *) vty->index;
+  if_data = ifp->info;
+  if_data->shutdown = IF_ZEBRA_SHUTDOWN_ON;
   if (ifp->ifindex != IFINDEX_INTERNAL)
   {
     ret = if_unset_flags (ifp, IFF_UP | IFF_RUNNING);
@@ -1111,8 +1113,6 @@ DEFUN (shutdown_if,
       vty_out (vty, "Can't shutdown interface%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
-    if_data = ifp->info;
-    if_data->shutdown = IF_ZEBRA_SHUTDOWN_ON;
     if_refresh (ifp);
   }
   return CMD_SUCCESS;
@@ -1129,6 +1129,8 @@ DEFUN (no_shutdown_if,
   struct zebra_if *if_data;
 
   ifp = (struct interface *) vty->index;
+  if_data = ifp->info;
+  if_data->shutdown = IF_ZEBRA_SHUTDOWN_OFF;
 
   if (ifp->ifindex != IFINDEX_INTERNAL)
   {
@@ -1138,8 +1140,6 @@ DEFUN (no_shutdown_if,
       vty_out (vty, "Can't up interface%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
-    if_data = ifp->info;
-    if_data->shutdown = IF_ZEBRA_SHUTDOWN_OFF;
     if_refresh (ifp);
 
     /* Some addresses (in particular, IPv6 addresses on Linux) get
