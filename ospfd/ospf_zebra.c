@@ -50,6 +50,9 @@
 #endif /* HAVE_SNMP */
 
 #ifdef ENABLE_OVSDB
+extern unsigned char redist[ZEBRA_ROUTE_MAX];
+extern unsigned char redist_default;
+
 extern void
 if_set_value_from_ovsdb (struct ovsdb_idl *, const struct ovsrec_port *, struct interface *);
 #endif
@@ -775,8 +778,13 @@ ospf_zebra_delete_discard (struct prefix_ipv4 *p)
 int
 ospf_is_type_redistributed (int type)
 {
+#ifdef ENABLE_OVSDB
+  return (DEFAULT_ROUTE_TYPE (type)) ?
+    redist_default : redist[type];
+#else
   return (DEFAULT_ROUTE_TYPE (type)) ?
     zclient->default_information : zclient->redist[type];
+#endif
 }
 
 int
