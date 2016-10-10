@@ -22,6 +22,7 @@ OpenSwitch Test for vlan related configurations.
 
 from bgp_config import BgpConfig
 from vtysh_utils import SwitchVtyshUtils
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 # +-------+
@@ -66,22 +67,27 @@ def addfilterlist(list_, dir_, asn):
 def configure_switch_ip(step):
     step("\n########## Configuring switch IPs.. ##########\n")
 
+    bgp_router_id = ['8.0.0.1', '8.0.0.2']
     i = 0
     for switch in switches:
-        bgp_cfg = bgp_config_arr[i]
-
         step("### Setting IP %s/%s on switch %s ###\n" %
-             (bgp_cfg.routerid, default_pl, switch.name))
+             (bgp_router_id[i], default_pl, switch.name))
 
         switch("configure terminal")
         switch("interface %s" % switch.ports["if01"])
         switch("no shutdown")
-        switch("ip address %s/%s" % (bgp_cfg.routerid,
+        switch("ip address %s/%s" % (bgp_router_id[i],
                                      default_pl))
         switch("end")
 
         i += 1
 
+def verify_interface_on(step):
+    step("\n########## Verifying interface are up ########## \n")
+
+    for switch in switches:
+        ports = [switch.ports["if01"]]
+        verify_turn_on_interfaces(switch, ports)
 
 def setup_bgp_config(step):
     global bgp_config1, bgp_config2, bgp_config_arr
@@ -345,8 +351,9 @@ def test_bgp_ft_filter_list(topology, step):
     ops1.name = "ops1"
     ops2.name = "ops2"
 
-    setup_bgp_config(step)
     configure_switch_ip(step)
+    verify_interface_on(step)
+    setup_bgp_config(step)
     verify_bgp_running(step)
     apply_bgp_config(step)
     verify_bgp_configs(step)

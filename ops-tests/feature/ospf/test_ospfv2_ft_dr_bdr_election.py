@@ -19,6 +19,7 @@ from ospf_configs import configure_interface, configure_ospf_router
 from ospf_configs import wait_for_adjacency, verify_ospf_priority
 from ospf_configs import wait_for_2way_state, get_neighbor_state
 from pytest import fixture
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 #                         sw4(L2)
@@ -72,6 +73,10 @@ def configuration(topology, request):
     configure_interface(sw1, SW1_INTF1, SW1_INTF1_IPV4_ADDR)
     configure_interface(sw2, SW2_INTF1, SW2_INTF1_IPV4_ADDR)
     configure_interface(sw3, SW3_INTF1, SW3_INTF1_IPV4_ADDR)
+
+    verify_turn_on_interfaces(sw1, sw1.ports[SW1_INTF1])
+    verify_turn_on_interfaces(sw2, sw2.ports[SW2_INTF1])
+    verify_turn_on_interfaces(sw3, sw3.ports[SW3_INTF1])
 
     # Configuring ospf with network command in sw1, sw2 and sw3
     configure_ospf_router(sw1, SW1_ROUTER_ID, SW1_INTF1_IPV4_ADDR, OSPF_AREA_1)

@@ -1035,7 +1035,7 @@ def add_static_routes_via_l3_sub_interfaces(sw1, sw2, step):
 
     sleep(ZEBRA_TEST_SLEEP_TIME)
 
-    step("Verifying the IPv4 static routes via loopbacks on switch 1")
+    step("Verifying the IPv4 static routes via L3 sub-interfaces on switch 1")
 
     # Verify route 173.0.0.1/32 and next-hops in RIB, FIB and
     # running-config
@@ -1160,7 +1160,7 @@ def no_routing_trigger_l3_parent_interfaces(sw1, sw2, step):
 
     sleep(ZEBRA_TEST_SLEEP_TIME)
 
-    step("Verifying the IPv4 static routes via loopbacks on switch 1")
+    step("Verifying the IPv4 static routes via L3 sub-interfaces on switch 1")
 
     # Verify route 173.0.0.1/32 and next-hops in RIB, FIB and
     # running-config

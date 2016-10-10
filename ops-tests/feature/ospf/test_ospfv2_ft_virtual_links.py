@@ -20,6 +20,7 @@ from ospf_configs import configure_interface, configure_ospf_router
 from ospf_configs import unconfigure_interface, unconfigure_ospf_router
 from ospf_configs import wait_for_adjacency, verify_virtual_links
 from pytest import fixture
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 #
@@ -81,6 +82,9 @@ def configuration(topology, request):
     configure_interface(dut1, DUT1_INTF2, DUT1_INTF2_IPV4_ADDR)
     configure_interface(sw1, SW1_INTF1, SW1_INTF1_IPV4_ADDR)
     configure_interface(sw3, SW3_INTF2, SW3_INTF2_IPV4_ADDR)
+
+    verify_turn_on_interfaces(sw1, [sw1.ports[SW1_INTF1]])
+    verify_turn_on_interfaces(sw3, [sw3.ports[SW3_INTF2]])
 
     # Configuring ospf with network command in dut1, sw1 and sw3
     configure_ospf_router(dut1, DUT1_ROUTER_ID, DUT1_INTF1_IPV4_ADDR,

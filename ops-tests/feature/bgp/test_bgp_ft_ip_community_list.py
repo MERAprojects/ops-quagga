@@ -22,6 +22,7 @@ OpenSwitch Test for vlan related configurations.
 
 from bgp_config import BgpConfig
 from vtysh_utils import SwitchVtyshUtils
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 # Nodes
@@ -53,9 +54,9 @@ all_cfg_array = []
 def configure_switch_ips(step):
     step("\n########## Configuring switch IPs.. ##########\n")
 
+    bgp_router_id = ['9.0.0.1', '9.0.0.2', '10.0.0.2']
     i = 0
     for switch in switches:
-        bgp_cfg = bgpconfigarr[i]
 
         if switch.name == "ops1":
             switch("configure terminal")
@@ -68,12 +69,23 @@ def configure_switch_ips(step):
         switch("configure terminal")
         switch("interface %s" % switch.ports["if01"])
         switch("no shutdown")
-        switch("ip address %s/%s" % (bgp_cfg.routerid,
+        switch("ip address %s/%s" % (bgp_router_id[i],
                                      default_pl))
         switch("end")
 
         i += 1
 
+def verify_interface_on(step):
+    step("\n########## Verifying interface are up ########## \n")
+
+    for switch in switches:
+        int1 = switch.ports["if01"]
+        if switch.name == "ops1":
+            int2 = switch.ports["if02"]
+            ports = [int1, int2]
+        else:
+            ports = [int1]
+        verify_turn_on_interfaces(switch, ports)
 
 def setup_bgp_config(step):
     global bgpconfigarr, bgp_config1, bgp_config2, bgp_config3
@@ -307,8 +319,9 @@ def test_bgp_ft_ip_community_list(topology, step):
     ops2.name = "ops2"
     ops3.name = "ops3"
 
-    setup_bgp_config(step)
     configure_switch_ips(step)
+    verify_interface_on(step)
+    setup_bgp_config(step)
     verify_bgp_running(step)
     apply_bgp_config(step)
     verify_bgp_configs(step)

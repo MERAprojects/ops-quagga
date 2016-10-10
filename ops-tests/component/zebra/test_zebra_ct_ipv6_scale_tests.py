@@ -23,7 +23,6 @@ from route_generator_and_stats_reporter import (
     capture_output_samples_and_generate_perf_stats
 )
 from time import sleep
-from pytest import mark
 
 TOPOLOGY = """
 # +-------+    +-------+
@@ -46,6 +45,8 @@ sw1:if04 -- sw2:if04
 """
 
 
+# The number of routes under test should be greater than the batch size
+# being used within zebra
 MAX_IPV6_ROUTE = 250
 TOTAL_TIME = 8
 SAMPLING_TIME = 2
@@ -319,7 +320,6 @@ def InterfaceNoRouting(sw1, sw2, ipv6_route_list, step):
            actual: " + str(perf_stats_dict['TotalShowRunning'])
 
 
-@mark.skipif(True, reason="Skipping scaled zebra IPv6 route tests")
 def test_zebra_ct_ipv6_scale_tests(topology, step):
     sw1 = topology.get("sw1")
     sw2 = topology.get("sw2")

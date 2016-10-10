@@ -1279,10 +1279,16 @@ peer_delete (struct peer *peer)
       peer->password = NULL;
 
       if (! CHECK_FLAG (peer->sflags, PEER_STATUS_GROUP))
-	bgp_md5_set (peer);
+        bgp_md5_set (peer);
     }
   
   bgp_timer_set (peer); /* stops all timers for Deleted */
+
+#ifdef ENABLE_OVSDB
+  /* Delete BFD neighbor and stop the session */
+  if (CHECK_FLAG (peer->flags, PEER_FLAG_BFD))
+      bgp_bfd_neigh_del(peer);
+#endif
   
   /* Delete from all peer list. */
   if (! CHECK_FLAG (peer->sflags, PEER_STATUS_GROUP)
@@ -2401,6 +2407,9 @@ static const struct peer_flag_action peer_flag_action_list[] =
     { PEER_FLAG_STRICT_CAP_MATCH,         0, peer_change_none },
     { PEER_FLAG_DYNAMIC_CAPABILITY,       0, peer_change_reset },
     { PEER_FLAG_DISABLE_CONNECTED_CHECK,  0, peer_change_reset },
+#ifdef ENABLE_OVSDB
+    { PEER_FLAG_BFD,                      0, peer_change_none },
+#endif
     { 0, 0, 0 }
   };
 
@@ -2577,10 +2586,21 @@ peer_flag_modify (struct peer *peer, u_int32_t flag, int set)
   else
     UNSET_FLAG (peer->flags, flag);
  
+#ifdef ENABLE_OVSDB
+  /* Update BFD peer flags */
+  if (flag == PEER_FLAG_BFD)
+  {
+      if (set)
+       bgp_bfd_neigh_add(peer);
+      else
+	bgp_bfd_neigh_del(peer);
+  }
+#endif
+
   if (! CHECK_FLAG (peer->sflags, PEER_STATUS_GROUP))
     {
       if (action.type == peer_change_reset)
-	peer_flag_modify_action (peer, flag);
+        peer_flag_modify_action (peer, flag);
 
       return 0;
     }
@@ -4901,6 +4921,12 @@ bgp_config_write_peer (struct vty *vty, struct bgp *bgp,
 		   " no-prepend" : "",
 		   CHECK_FLAG (peer->flags, PEER_FLAG_LOCAL_AS_REPLACE_AS) ?
 		   " replace-as" : "", VTY_NEWLINE);
+
+#ifdef ENABLE_OVSDB
+      /* BFD */
+      if (CHECK_FLAG (peer->flags, PEER_FLAG_BFD))
+        vty_out (vty, " neighbor %s fall-over bfd%s", addr, VTY_NEWLINE);
+#endif
 
       /* Description. */
       if (peer->desc)

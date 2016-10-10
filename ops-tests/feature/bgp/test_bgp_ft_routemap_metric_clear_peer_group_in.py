@@ -22,6 +22,7 @@ OpenSwitch Test for vlan related configurations.
 
 from time import sleep
 from pytest import mark
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 # +-------+
@@ -290,6 +291,8 @@ def configure(step, switch1, switch2, switch3):
         # Assigning an IPv4 address on interface 1 of SW1
         ctx.ip_address("%s/%s" % (IP_ADDR1, DEFAULT_PL))
 
+    verify_turn_on_interfaces(switch1, [switch1.ports["if01"]])
+
     with switch2.libs.vtysh.ConfigInterface("if01") as ctx:
         # Enabling interface 1 SW2.
         step("Enabling interface1 on SW2")
@@ -304,12 +307,17 @@ def configure(step, switch1, switch2, switch3):
         # Assigning an IPv4 address on interface 2 of SW2
         ctx.ip_address("%s/%s" % (IP_ADDR2_2, DEFAULT_PL))
 
+    ports = [switch2.ports["if01"], switch2.ports["if02"]]
+    verify_turn_on_interfaces(switch2, ports)
+
     with switch3.libs.vtysh.ConfigInterface("if01") as ctx:
         # Enabling interface 1 SW3.
         step("Enabling interface1 on SW3")
         ctx.no_shutdown()
         # Assigning an IPv4 address on interface 1 of SW3
         ctx.ip_address("%s/%s" % (IP_ADDR3, DEFAULT_PL))
+
+    verify_turn_on_interfaces(switch3, [switch3.ports["if01"]])
 
 #   For SW1, SW2 and SW3, configure bgp
     step("Configuring router id on SW1")

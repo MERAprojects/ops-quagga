@@ -1536,6 +1536,138 @@ daemon_neighbor_remote_as_cmd_execute (struct bgp *bgp, char *peer_str,
   return log_bgp_error(ret);
 }
 
+int bgp_bfd_neigh_add(struct peer *peer)
+{
+  char remote_str[BUFSIZ];
+  char local_str[BUFSIZ];
+
+  if (!CHECK_FLAG (peer->flags, PEER_FLAG_BFD)) {
+    VLOG_DBG("BFD is not enabled for peer=%s\n", peer->host);
+    return 1;
+  }
+
+  if (!peer->su_local) {
+    VLOG_DBG("Waiting to create BFD session .. su_local is Invalid\n");
+    return 1;
+  }
+
+  if (!peer->su_remote) {
+    VLOG_DBG("Waiting to create BFD session .. su_remote is Invalid\n");
+    return 1;
+  }
+
+  if (peer->su_local)
+    sockunion2str(peer->su_local, local_str, SU_ADDRSTRLEN);
+
+  if (peer->su_remote)
+    sockunion2str(peer->su_remote, remote_str, SU_ADDRSTRLEN);
+
+  VLOG_DBG("Creating BFD session for AS=%d host=%s peer=%s local=%s\n",
+           peer->local_as, peer->host, remote_str, local_str);
+
+  bgp_create_bfd_session_in_ovsdb(remote_str, local_str, peer->local_as);
+  return 0;
+}
+
+int bgp_bfd_neigh_del(struct peer *peer)
+{
+  char remote_str[BUFSIZ];
+
+  if (!peer->su_remote) {
+    VLOG_DBG("BFD session not created for %s, nothing to do here\n", peer->host);
+    return 1;
+  }
+
+  if (peer->su_remote)
+    sockunion2str(peer->su_remote, remote_str, SU_ADDRSTRLEN);
+
+  VLOG_DBG("Deleting BFD session for  AS=%d host=%s peer=%s\n",
+           peer->local_as, peer->host, remote_str);
+
+  bgp_delete_bfd_session_in_ovsdb(remote_str, peer->local_as);
+  return 0;
+}
+
+int bgp_bfd_neigh_estab(struct peer *peer)
+{
+  VLOG_DBG("BGP neighbor established for peer=%s, Update BFD \n", peer->host);
+
+  /* Nothing here at this time .. will revisit if needed */
+  /* Updates like per session BFD timer configuration etc. */
+
+  return 0;
+}
+
+/*
+** neighbor_fall_over_cmd
+*/
+int
+daemon_neighbor_bfd_fallover_enable_cmd_execute (struct bgp *bgp, char *peer_str, bool fall_over)
+{
+    struct peer *peer;
+
+    peer= bgp_peer_and_group_lookup (bgp, peer_str);
+    if (! peer) return 1;
+
+    VLOG_DBG("neighbor %s fallover bfd %s \n",
+             peer_str, (fall_over)? "enable" : "disable");
+
+    if (fall_over) {
+        return peer_flag_set(peer, PEER_FLAG_BFD);
+    } else {
+        return peer_flag_unset (peer, PEER_FLAG_BFD);
+    }
+
+    return 0;
+}
+
+static int
+peer_bfd_state_get (struct peer *peer)
+{
+  return peer->bfd_status;
+}
+
+static int
+peer_bfd_state_set (struct peer *peer, int state)
+{
+  peer->bfd_status = state;
+  return 0;
+}
+
+int
+daemon_neighbor_bfd_state_cmd_execute (struct bgp *bgp, char *peer_str, int bfd_state)
+{
+    struct peer *peer;
+    int ret;
+
+
+    peer= bgp_peer_and_group_lookup (bgp, peer_str);
+    if (! peer) return 1;
+
+    if (!CHECK_FLAG (peer->flags, PEER_FLAG_BFD)) {
+      VLOG_ERR("BFD not enabled for this neighbor %s, bfd_state %d\n", peer_str, bfd_state);
+      return 1;
+    }
+
+    if (peer_bfd_state_get(peer) == bfd_state) {
+      VLOG_DBG("No change to BFD current state, peer_str %s, bfd_state %d\n", peer_str, bfd_state);
+      return 0;
+    }
+
+    VLOG_DBG("Processing BFD state change, peer_str %s, bfd_state %d\n", peer_str, bfd_state);
+
+    /* Set bfd state */
+    peer_bfd_state_set (peer, bfd_state);
+
+    if (bfd_state == BFD_SESSION_STATE_UP) {
+        ret = peer_flag_unset(peer, PEER_FLAG_SHUTDOWN);
+    } else {
+        ret = peer_flag_set(peer, PEER_FLAG_SHUTDOWN);
+    }
+
+    return log_bgp_error(ret);
+}
+
 int
 daemon_neighbor_peer_group_cmd_execute (struct bgp *bgp,
                                         const char *groupName)
