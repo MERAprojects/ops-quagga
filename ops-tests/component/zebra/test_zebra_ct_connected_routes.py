@@ -286,10 +286,10 @@ def configure_layer3_interfaces(sw1, sw2, step):
     rib_ipv4_loopback_connected_route_primary = dict()
     rib_ipv4_loopback_connected_route_primary['Route'] = '4.4.4.0/24'
     rib_ipv4_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv4_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv4_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv4_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ip route") route dictionary for the connected
     # IPv4 route for loopback primary address and its next-hops.
@@ -300,10 +300,10 @@ def configure_layer3_interfaces(sw1, sw2, step):
     rib_ipv6_loopback_connected_route_primary = dict()
     rib_ipv6_loopback_connected_route_primary['Route'] = '4:4::/64'
     rib_ipv6_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv6_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv6_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv6_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ipv6 route") route dictionary for the connected
     # IPv6 route for sub-interface primary address and its next-hops.
@@ -1707,10 +1707,10 @@ def reconfigure_addresses_on_layer3_interfaces(sw1, sw2, step):
     rib_ipv4_loopback_connected_route_primary = dict()
     rib_ipv4_loopback_connected_route_primary['Route'] = '4.4.4.0/24'
     rib_ipv4_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv4_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv4_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv4_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ip route") route dictionary for the connected
     # IPv4 route for loopback primary address and its next-hops.
@@ -1721,10 +1721,10 @@ def reconfigure_addresses_on_layer3_interfaces(sw1, sw2, step):
     rib_ipv6_loopback_connected_route_primary = dict()
     rib_ipv6_loopback_connected_route_primary['Route'] = '4:4::/64'
     rib_ipv6_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv6_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv6_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv6_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ipv6 route") route dictionary for the connected
     # IPv6 route for sub-interface primary address and its next-hops.
@@ -2089,10 +2089,10 @@ def restart_zebra_with_config_change_for_layer3_interfaces(sw1, sw2, step):
     rib_ipv4_loopback_connected_route_primary = dict()
     rib_ipv4_loopback_connected_route_primary['Route'] = '6.6.6.0/24'
     rib_ipv4_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv4_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv4_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv4_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ip route") route dictionary for the connected
     # IPv4 route for loopback primary address and its next-hops.
@@ -2103,10 +2103,10 @@ def restart_zebra_with_config_change_for_layer3_interfaces(sw1, sw2, step):
     rib_ipv6_loopback_connected_route_primary = dict()
     rib_ipv6_loopback_connected_route_primary['Route'] = '6:6::/64'
     rib_ipv6_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv6_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv6_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv6_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ipv6 route") route dictionary for the connected
     # IPv6 route for loopback primary address and its next-hops.
@@ -2559,10 +2559,10 @@ def change_layer3_interface_config_after_zebra_restart(sw1, sw2, step):
     rib_ipv4_loopback_connected_route_primary = dict()
     rib_ipv4_loopback_connected_route_primary['Route'] = '4.4.4.0/24'
     rib_ipv4_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv4_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv4_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv4_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv4_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv4_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ip route") route dictionary for the connected
     # IPv4 route for loopback primary address and its next-hops.
@@ -2573,10 +2573,10 @@ def change_layer3_interface_config_after_zebra_restart(sw1, sw2, step):
     rib_ipv6_loopback_connected_route_primary = dict()
     rib_ipv6_loopback_connected_route_primary['Route'] = '4:4::/64'
     rib_ipv6_loopback_connected_route_primary['NumberNexthops'] = '1'
-    rib_ipv6_loopback_connected_route_primary['lo1'] = dict()
-    rib_ipv6_loopback_connected_route_primary['lo1']['Distance'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['Metric'] = '0'
-    rib_ipv6_loopback_connected_route_primary['lo1']['RouteType'] = 'connected'
+    rib_ipv6_loopback_connected_route_primary['loopback1'] = dict()
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Distance'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['Metric'] = '0'
+    rib_ipv6_loopback_connected_route_primary['loopback1']['RouteType'] = 'connected'
 
     # Populate the expected RIB ("show ipv6 route") route dictionary for the connected
     # IPv6 route for loopback primary address and its next-hops.

@@ -2220,16 +2220,16 @@ zebra_walk_l3_cache_and_restore_connected_routes_after_zebra_restart ()
     }
 
   /*
-   * Create a transaction to publish the connected route updates
-   * into OVSDB
-   */
-  zebra_create_txn();
-
-  /*
    * Iterate over all the L3 port nodes in L3 cache
    */
   SHASH_FOR_EACH_SAFE (node, next, &zebra_cached_l3_ports)
     {
+      /*
+       * Create a transaction to publish the connected route updates
+       * into OVSDB
+       */
+      zebra_create_txn();
+
       if (!node)
         {
           VLOG_DBG("No node found in the L3 port hash\n");
@@ -2324,17 +2324,17 @@ zebra_walk_l3_cache_and_restore_connected_routes_after_zebra_restart ()
   zebra_finish_txn(true);
 
   /*
-   * Create a transaction to publish the connected route updates
-   * into OVSDB
-   */
-  zebra_create_txn();
-
-  /*
    * At this point, if there are any route entries left in the connected routes
    * hash, then these connected routes need to be deleted.
    */
   SHASH_FOR_EACH_SAFE (node, next, &connected_routes_hash_after_restart)
     {
+      /*
+       * Create a transaction to publish the connected route updates
+       * into OVSDB
+       */
+      zebra_create_txn();
+
       if (!node)
         {
           VLOG_DBG("No node found in the L3 port hash\n");
@@ -2416,17 +2416,17 @@ zebra_delete_connected_routes_from_deleted_l3_port_cache ()
   ovsrec_port = xzalloc(sizeof(struct ovsrec_port));
 
   /*
-   * Create a transaction so send deleted connected routes update
-   * to OVSDB
-   */
-  zebra_create_txn();
-
-  /*
    * Walk all the L3 nodes in the hash and delete all connected routes
    * in this hash
    */
   SHASH_FOR_EACH_SAFE (node, next, &zebra_updated_or_changed_l3_ports)
     {
+      /*
+       * Create a transaction so send deleted connected routes update
+       * to OVSDB
+       */
+      zebra_create_txn();
+
       if (!node)
         {
           VLOG_DBG("No node found in the L3 port hash\n");
@@ -3361,14 +3361,14 @@ zebra_find_routes_with_updated_ports_state (
   VLOG_DBG("Cleaning-up/Populating %s routes in response to %s trigger",
            (afi == AFI_IP) ? "IPv4" : "IPv6",cleanup_reason);
 
-  /*
-   * Create a transaction for any IDL route updates to OVSDB from
-   * the zebra main thread.
-   */
-  zebra_create_txn();
-
   for (rn = route_top (table); rn; rn = route_next (rn))
     {
+      /*
+       * Create a transaction for any IDL route updates to OVSDB from
+       * the zebra main thread.
+       */
+      zebra_create_txn();
+
       if (!rn)
         {
           VLOG_ERR("Route node is NULL");
@@ -4868,15 +4868,15 @@ zebra_handle_interface_admin_state_changes (void)
   if (OVSREC_IDL_IS_COLUMN_MODIFIED(
              ovsrec_interface_col_admin_state, idl_seqno))
     {
-      /*
-       * Create a transaction for any IDL route updates to OVSDB
-       * from the zebra main thread for updating the selected bit
-       * pn the connected routes.
-       */
-      zebra_create_txn();
-
       OVSREC_INTERFACE_FOR_EACH (interface_row, idl)
         {
+          /*
+           * Create a transaction for any IDL route updates to OVSDB
+           * from the zebra main thread for updating the selected bit
+           * pn the connected routes.
+           */
+          zebra_create_txn();
+
           /*
            * Check if the interface row changed.
            */
@@ -5168,16 +5168,16 @@ zebra_ovsdb_update_active_router_id(void)
     }
 
   /*
-   * Create a transaction for an active router id update to OVSDB from
-   * the zebra main thread.
-   */
-  zebra_create_txn();
-
-  /*
    * Update active router id for the Default VRF
    */
   OVSREC_VRF_FOR_EACH(ovs_vrf, idl)
     {
+      /*
+       * Create a transaction for an active router id update to OVSDB from
+       * the zebra main thread.
+       */
+      zebra_create_txn();
+
       if (!strcmp(ovs_vrf->name, DEFAULT_VRF_NAME))
         {
           /*
@@ -5214,6 +5214,7 @@ zebra_ovsdb_update_active_router_id(void)
           zebra_finish_txn(false);
         }
     }
+
   zebra_finish_txn(true);
 }
 
@@ -5248,17 +5249,16 @@ zebra_handle_port_add_delete_changes (void)
                                       zebra_route_list_free_data;
 
   /*
-   * Create a transaction for any IDL route updates to OVSDB from
-   * the zebra main thread for the connected routes.
-   */
-  zebra_create_txn();
-
-  /*
    * Walk through all the port in the IDL and update the L3 port
    * hash.
    */
   OVSREC_PORT_FOR_EACH (first_port_row, idl)
     {
+      /*
+       * Create a transaction for any IDL route updates to OVSDB from
+       * the zebra main thread for the connected routes.
+       */
+      zebra_create_txn();
 
       if (first_port_row)
         {

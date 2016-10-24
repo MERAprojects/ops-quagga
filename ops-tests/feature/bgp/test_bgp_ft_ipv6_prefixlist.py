@@ -21,6 +21,7 @@ OpenSwitch Test for vlan related configurations.
 """
 
 from time import sleep
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 # +-------+
@@ -211,6 +212,26 @@ def configure(step, switch1, switch2):
      - Apply route-map to neighbor on SW1
     """
 
+    with switch1.libs.vtysh.ConfigInterface("if01") as ctx:
+        # Enabling interface 1 SW1.
+        step("Enabling interface1 on SW1")
+        ctx.no_shutdown()
+        # Assigning an IPv6 address on interface 1 of SW1
+        step("Configuring IPv6 address on link 1 SW1")
+        ctx.ipv6_address("%s/%s" % (ipv6_addr1, default_pl))
+
+    verify_turn_on_interfaces(switch1, [switch1.ports["if01"]])
+
+    with switch2.libs.vtysh.ConfigInterface("if01") as ctx:
+        # Enabling interface 1 SW2.
+        step("Enabling interface1 on SW1")
+        ctx.no_shutdown()
+        # Assigning an IPv6 address on interface 1 of SW2
+        step("Configuring IPv6 address on link 1 SW2")
+        ctx.ipv6_address("%s/%s" % (ipv6_addr2, default_pl))
+
+    verify_turn_on_interfaces(switch2, [switch2.ports["if01"]])
+
     # Configuring ipv6 prefix-list on switch 1
     step("Configuring ipv6 prefix configuration on SW1")
     configure_prefix_list(switch1, "BGP1_IN", "10", "deny",
@@ -246,14 +267,6 @@ def configure(step, switch1, switch2):
     configure_neighbor_rmap(switch1, as_num1, ipv6_addr2, as_num2,
                             "BGP1_IN", "in")
     sleep(5)
-
-    with switch1.libs.vtysh.ConfigInterface("if01") as ctx:
-        # Enabling interface 1 SW1.
-        step("Enabling interface1 on SW1")
-        ctx.no_shutdown()
-        # Assigning an IPv6 address on interface 1 of SW1
-        step("Configuring IPv6 address on link 1 SW1")
-        ctx.ipv6_address("%s/%s" % (ipv6_addr1, default_pl))
 
     # Configuring ipv6 prefix-list on switch 2
     step("Configuring ipv6 prefix list configuration on SW2")
@@ -312,14 +325,6 @@ def configure(step, switch1, switch2):
     configure_neighbor_rmap(switch2, as_num2, ipv6_addr1, as_num1,
                             "BGP2_Rmap2", "in")
     sleep(10)
-
-    with switch2.libs.vtysh.ConfigInterface("if01") as ctx:
-        # Enabling interface 1 SW2.
-        step("Enabling interface1 on SW1")
-        ctx.no_shutdown()
-        # Assigning an IPv6 address on interface 1 of SW2
-        step("Configuring IPv6 address on link 1 SW2")
-        ctx.ipv6_address("%s/%s" % (ipv6_addr2, default_pl))
 
 
 def test_bgp_ft_ipv6_prefixlist(topology, step):

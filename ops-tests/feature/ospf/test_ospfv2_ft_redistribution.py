@@ -22,6 +22,8 @@ from ospf_configs import configure_bgp_network
 from ospf_configs import unconfigure_ospf_network
 from ospf_configs import unconfigure_interface, unconfigure_ospf_router
 from pytest import fixture
+from pytest import mark
+from interface_utils import verify_turn_on_interfaces
 
 
 TOPOLOGY = """
@@ -102,6 +104,13 @@ def configuration(topology, request):
     configure_interface(sw2, SW2_INTF2, SW2_INTF2_IPV4_ADDR)
     configure_interface(sw3, SW3_INTF1, SW3_INTF1_IPV4_ADDR)
     configure_interface(sw3, SW3_INTF2, SW3_INTF2_IPV4_ADDR)
+
+    ports_sw1 = [sw1.ports[SW1_INTF1], sw1.ports[SW1_INTF2]]
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    ports_sw2 = [sw2.ports[SW2_INTF1], sw2.ports[SW2_INTF2]]
+    verify_turn_on_interfaces(sw2, ports_sw2)
+    ports_sw3 = [sw3.ports[SW3_INTF1], sw3.ports[SW3_INTF2]]
+    verify_turn_on_interfaces(sw3, ports_sw3)
 
     # Configure IP and bring UP host 1 interfaces
     hs1.libs.ip.interface('1', addr='10.10.40.2/24', up=True)
@@ -343,7 +352,7 @@ def test_ospf_redistribute_bgp_routes(topology, configuration, step):
                           SW3_INTF1_IPV4_ADDR, SW3_NEIGHBOR, ASN_2)
 
     # Waiting for BGP routes to be updated in show rib command
-    time.sleep(10)
+    time.sleep(20)
     step('###### Verifying the redistributed BGP route '
          'in sw3 from sw1 ######')
     retval = verify_route(sw1, '10.10.30.0', '24')

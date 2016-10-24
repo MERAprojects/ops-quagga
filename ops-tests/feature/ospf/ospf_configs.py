@@ -311,7 +311,7 @@ def verify_ip_route(switch_id, ip_addr, prefix, intf_with_cost):
     output = switch_id.libs.vtysh.show_running_config()
     if output:
         result = output['ip_routes'][ip_addr]
-        if result['via'] == '1 100' and result['prefix'] == '24':
+        if result['via'] == intf_with_cost and result['prefix'] == prefix:
             return True
     return False
 

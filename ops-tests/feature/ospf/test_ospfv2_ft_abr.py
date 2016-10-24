@@ -21,6 +21,7 @@ from ospf_configs import unconfigure_interface, unconfigure_ospf_router
 from ospf_configs import wait_for_adjacency, verify_route
 from ospf_configs import verify_router_type
 from pytest import fixture
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 #
@@ -102,6 +103,17 @@ def configuration(topology, request):
     configure_interface(sw3, SW3_INTF2, SW3_INTF2_IPV4_ADDR)
     configure_interface(sw4, SW4_INTF1, SW4_INTF1_IPV4_ADDR)
     configure_interface(sw5, SW5_INTF2, SW5_INTF2_IPV4_ADDR)
+
+    ports_sw1 = [sw1.ports[SW1_INTF1], sw1.ports[SW1_INTF2]]
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    ports_sw2 = [sw2.ports[SW2_INTF1], sw2.ports[SW2_INTF2]]
+    verify_turn_on_interfaces(sw2, ports_sw2)
+    ports_sw3 = [sw3.ports[SW3_INTF1], sw3.ports[SW3_INTF2]]
+    verify_turn_on_interfaces(sw3, ports_sw3)
+    ports_sw4 = [sw4.ports[SW4_INTF1]]
+    verify_turn_on_interfaces(sw4, ports_sw4)
+    ports_sw5 = [sw5.ports[SW5_INTF2]]
+    verify_turn_on_interfaces(sw5, ports_sw5)
 
     # Configuring ospf with network command in sw1, sw2, sw3, sw4 and sw5
     configure_ospf_router(sw1, SW1_ROUTER_ID, SW1_INTF1_IPV4_ADDR,

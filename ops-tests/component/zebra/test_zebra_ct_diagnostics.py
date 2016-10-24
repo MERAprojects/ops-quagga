@@ -102,12 +102,6 @@ def test_zebra_diag_dump(topology, step):
     assert '-------- Zebra memory dump: --------' in output, \
            'Missing memory dump in "zebra/dump" output'
 
-    step('### Testing invalid arguments to "ovs-appctl -t ops-zebra zebra/diag" ###')
-    output = sw1("ovs-appctl -t ops-zebra zebra/diag -1", shell="bash")
-    assert 'Buffer length can only be set to a positive integer value' in output, \
-           '"ovs-appctl -t ops-zebra zebra/diag" should only accept positive \
-           integer values'
-
     step('### Testing invalid arguments to "ovs-appctl -t ops-zebra zebra/debug" ###')
     output = sw1("ovs-appctl -t ops-zebra zebra/debug unsupported", shell="bash")
     assert 'Unsupported argument - unsupported' in output, \

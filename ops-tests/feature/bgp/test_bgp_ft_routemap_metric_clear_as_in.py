@@ -15,6 +15,7 @@
 
 from time import sleep
 import pytest
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 #
@@ -287,6 +288,8 @@ def configure(sw1, sw2, sw3):
     sw1("ip address %s/%s" % (IP_ADDR1, DEFAULT_PL))
     sw1("end")
 
+    verify_turn_on_interfaces(sw1, [sw1.ports["if01"]])
+
     # Enabling interface 1 SW2
     print("Enabling interface1 on SW2")
     sw2p1 = sw2.ports['if01']
@@ -311,6 +314,9 @@ def configure(sw1, sw2, sw3):
     sw2("ip address %s/%s" % (IP_ADDR2_2, DEFAULT_PL))
     sw2("end")
 
+    ports = [sw2.ports["if01"], sw2.ports["if02"]]
+    verify_turn_on_interfaces(sw2, ports)
+
     # Enabling interface 1 SW3
     print("Enabling interface 1 on SW3")
     sw3p1 = sw3.ports['if01']
@@ -322,6 +328,8 @@ def configure(sw1, sw2, sw3):
     print("Configuring IPv4 address on link 2 SW3")
     sw3("ip address %s/%s" % (IP_ADDR3, DEFAULT_PL))
     sw3("end")
+
+    verify_turn_on_interfaces(sw3, [sw3.ports["if01"]])
 
     # For SW1, SW2 and SW3, configure bgp
     print("Configuring route context on SW1")

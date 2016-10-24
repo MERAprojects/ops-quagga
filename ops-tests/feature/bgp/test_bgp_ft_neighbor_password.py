@@ -21,6 +21,7 @@ OpenSwitch Test for vlan related configurations.
 """
 
 from vtysh_utils import SwitchVtyshUtils
+from interface_utils import verify_turn_on_interfaces
 
 TOPOLOGY = """
 # +-------+
@@ -96,6 +97,14 @@ def configure_switch_ips(step):
 
         i += 1
 
+def verify_interface_on(step):
+    step("\n########## Verifying interface are up ########## \n")
+
+    for switch in switches:
+        ports = [switch.ports["if01"]]
+        verify_turn_on_interfaces(switch, ports)
+
+    step("\nExiting verify_interface_on\n")
 
 def configure_bgp(step):
     step("\n########## Configuring BGP on all switches.. ##########\n")
@@ -198,6 +207,7 @@ def test_bgp_ft_neighbor_password(topology, step):
     ops2.name = "ops2"
 
     configure_switch_ips(step)
+    verify_interface_on(step)
     configure_bgp(step)
     verify_neighbor_password(step)
     verify_incorrect_password(step)

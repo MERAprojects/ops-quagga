@@ -36,7 +36,6 @@
 #include "zebra/zebra_diagnostics.h"
 
 VLOG_DEFINE_THIS_MODULE(zebra_diagnostics);
-static int zebra_diag_buffer_len = ZEBRA_DIAG_DUMP_BUF_LEN;
 boolean exiting = false;
 
 
@@ -296,65 +295,44 @@ zebra_memory_dump(struct ds *ds)
  * passed.
  */
 static void
-zebrad_internals_dump(char *buf, int buf_size, const char *dump_option)
+zebrad_internals_dump(struct ds *ds, const char *dump_option)
 {
-  struct ds ds = DS_EMPTY_INITIALIZER;
-  int len;
-  char *err = "\nTruncated due to data exceeding buffer size";
-  char *promt = "\nIncrease buffer size using "
-     "'ovs-appctl -t ops-bgpd zebra/diag newsize'\n";
+  if (!ds)
+    return;
 
   if (!dump_option || !strcmp(dump_option, "rib"))
     {
-      zebra_dump_formatted_string(&ds, "\n-------- Zebra internal IPv4 "
+      zebra_dump_formatted_string(ds, "\n-------- Zebra internal IPv4 "
                                   "routes dump: --------\n");
-      zebra_dump_internal_route_table(&ds, vrf_table(AFI_IP,
+      zebra_dump_internal_route_table(ds, vrf_table(AFI_IP,
                                       SAFI_UNICAST, 0));
 
-      zebra_dump_formatted_string(&ds, "\n-------- Zebra internal IPv6 "
+      zebra_dump_formatted_string(ds, "\n-------- Zebra internal IPv6 "
                                   "routes dump: --------\n");
-      zebra_dump_internal_route_table(&ds, vrf_table(AFI_IP6,
+      zebra_dump_internal_route_table(ds, vrf_table(AFI_IP6,
                                       SAFI_UNICAST, 0));
     }
 
   if (!dump_option || !strcmp(dump_option, "kernel-routes"))
     {
-      zebra_kernel_routes_dump(&ds, false);
-      zebra_kernel_routes_dump(&ds, true);
+      zebra_kernel_routes_dump(ds, false);
+      zebra_kernel_routes_dump(ds, true);
     }
 
   if (!dump_option || !strcmp(dump_option, "l3-port-cache"))
     {
-      zebra_dump_formatted_string(&ds, "\n-------- Zebra L3 port "
+      zebra_dump_formatted_string(ds, "\n-------- Zebra L3 port "
                                   "cache dump: --------\n");
-      zebra_l3_port_walk_cache_and_print(&ds, &zebra_cached_l3_ports, true);
-      zebra_l3_port_walk_cache_and_print(&ds, &zebra_updated_or_changed_l3_ports,
+      zebra_l3_port_walk_cache_and_print(ds, &zebra_cached_l3_ports, true);
+      zebra_l3_port_walk_cache_and_print(ds, &zebra_updated_or_changed_l3_ports,
                                          false);
     }
 
   if (!dump_option || !strcmp(dump_option, "memory"))
     {
-      zebra_dump_formatted_string(&ds, "\n-------- Zebra memory dump: --------\n");
-      zebra_memory_dump(&ds);
+      zebra_dump_formatted_string(ds, "\n-------- Zebra memory dump: --------\n");
+      zebra_memory_dump(ds);
     }
-
-  len = snprintf(buf, buf_size, ds_cstr(&ds));
-
-  /* dump buffer len >= buffer size: log err, truncate data,
-   * promt user to increase size */
-  if(len >= buf_size)
-    {
-      VLOG_ERR("diag-dump: No more space on buffer to dump."
-              "Data size: %d, buffer size: %d, exceeds: %d\n",
-              len, buf_size, len - buf_size);
-
-      if(buf_size > MAX_PROMPT_MSG_STR_LEN)
-          snprintf(&buf[buf_size - MAX_PROMPT_MSG_STR_LEN-1],
-                   MAX_PROMPT_MSG_STR_LEN, "%s\nData %d bytes, Buffer %d bytes%s",
-                   err, len, buf_size, promt);
-    }
-
-  ds_destroy(&ds);
 }
 
 /* Callback handler function for dumping basic diagnostics for ops-zebra daemon.
@@ -364,11 +342,53 @@ zebrad_internals_dump(char *buf, int buf_size, const char *dump_option)
 static void
 zebra_diag_dump_basic_cb(const char *feature , char **buf)
 {
+  struct ds ds = DS_EMPTY_INITIALIZER;
+  char* memory_unavailable_message = "Route-manager diagnostics dump "
+                                     "not possible due to memory constraint";
+
   if (!buf)
     return;
 
-  *buf =  xzalloc(zebra_diag_buffer_len);
-  zebrad_internals_dump(*buf, zebra_diag_buffer_len, NULL);
+  /*
+   * Dump all zebra diagnostics data into 'ds'
+   */
+  zebrad_internals_dump(&ds, NULL);
+
+  /*
+   * Allocate memory which can hold all the diagnostics data in 'ds'
+   */
+  *buf =  malloc(ds.length + 1);
+
+  if (!(*buf))
+    {
+      VLOG_ERR("Unable to allocate %lu byptes of memory for route-manager"
+               "diagnostics", (ds.length + 1));
+
+      ds_destroy(&ds);
+
+      /*
+       * If buffer allocation fails, then signal to user that buffer allocation
+       * failed because of memory exhaustion.
+       */
+      *buf =  malloc(strlen(memory_unavailable_message) + 1);
+
+      if ((*buf))
+        {
+          snprintf(*buf, strlen(memory_unavailable_message) + 1,
+                   memory_unavailable_message);
+        }
+
+      return;
+    }
+
+  VLOG_DBG("Allocated %lu bytes for ops-zebra diags", (ds.length + 1));
+
+  /*
+   * Copy the diagnostics data into the allocated memory
+   */
+  snprintf(*buf, ds.length + 1, ds_cstr(&ds));
+
+  ds_destroy(&ds);
 }
 
 /*
@@ -378,7 +398,11 @@ static void
 zebra_unixctl_diag_dump (struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
+  struct ds ds = DS_EMPTY_INITIALIZER;
   char err_str[MAX_PROMPT_MSG_STR_LEN];
+  char* memory_unavailable_message = "Route-manager diagnostics dump "
+                                     "not possible due to memory constraint";
+  char* buf;
 
   if (parse_diag_dump_options(argc, argv, err_str, conn))
     {
@@ -386,37 +410,49 @@ zebra_unixctl_diag_dump (struct unixctl_conn *conn, int argc OVS_UNUSED,
       return;
     }
 
-  char *buf = xzalloc(zebra_diag_buffer_len);
+  /*
+   * Dump all zebra diagnostics data into 'ds'
+   */
+  zebrad_internals_dump(&ds, (argc == 2 ? argv[1] : NULL));
 
-  zebrad_internals_dump(buf, zebra_diag_buffer_len, (argc == 2 ? argv[1] : NULL));
-  unixctl_command_reply(conn, buf);
-  free(buf);
-}
+  /*
+   * Allocate memory which can hold all the diagnostics data in 'ds'
+   */
+  buf = malloc(ds.length + 1);
 
-/*
- * ovs appctl function to update the buffer length for diag dump.
- * The default length used is ZEBRA_DIAG_DUMP_BUF_LEN
- */
-static void
-zebra_diag_buff_set_len(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                        const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
-{
-  char buf[MAX_PROMPT_MSG_STR_LEN];
-  int tmp = zebra_diag_buffer_len;
-
-  zebra_diag_buffer_len = atoi(argv[1]);
-
-  if (zebra_diag_buffer_len <= 0)
+  if (!buf)
     {
-      snprintf(buf, sizeof(buf), "Buffer length can only be set "
-               "to a positive integer value");
-      unixctl_command_reply_error(conn, buf);
+      VLOG_ERR("Unable to allocate %lu byptes of memory for route-manager"
+               "diagnostics", (ds.length + 1));
+
+      ds_destroy(&ds);
+
+      /*
+       * Send the appctl error response
+       */
+      unixctl_command_reply_error(conn, memory_unavailable_message);
+
       return;
     }
 
-  snprintf(buf, sizeof(buf), "Set diag buffer size:\n"
-           "  Old: %d bytes\n  New: %d bytes\n", tmp, zebra_diag_buffer_len);
+  VLOG_DBG("Allocated %lu bytes for ops-zebra diags", (ds.length + 1));
+
+  /*
+   * Copy the diagnostics data into the allocated memory
+   */
+  snprintf(buf, ds.length + 1, ds_cstr(&ds));
+
+  /*
+   * Send the appctl response
+   */
   unixctl_command_reply(conn, buf);
+
+  ds_destroy(&ds);
+
+  /*
+   * Free the allocated buffer
+   */
+  free(buf);
 }
 
 /*
@@ -474,8 +510,6 @@ zebra_diagnostics_init()
   unixctl_command_register("zebra/debug", "event|packet|send|recv|detail|kernel"
                            "|rib|ribq|fpm|all|show|off", 1, 1,
                            zebra_unixctl_set_debug_level, NULL);
-  unixctl_command_register("zebra/diag", "buffer size", 1, 1,
-                           zebra_diag_buff_set_len, NULL);
 }
 
 /*
@@ -687,24 +721,24 @@ zebra_l3_port_node_print (struct ds *ds, struct zebra_l3_port* l3_port)
                               l3_port->port_name ?
                               l3_port->port_name : "NULL");
 
-  zebra_dump_formatted_string(ds,"     Port Primary IP Address: %s",
+  zebra_dump_formatted_string(ds,"     Port Primary IP Address: %s\n",
                               l3_port->ip4_address ? l3_port->ip4_address : "NULL");
-  zebra_dump_formatted_string(ds,"     Port Primary IPv6 Address: %s",
+  zebra_dump_formatted_string(ds,"     Port Primary IPv6 Address: %s\n",
                               l3_port->ip6_address ?
                               l3_port->ip6_address : "NULL");
 
-  zebra_dump_formatted_string(ds,"     OVSDB port UUID is: %s",
+  zebra_dump_formatted_string(ds,"     OVSDB port UUID is: %s\n",
                               zebra_dump_ovsdb_uuid((struct uuid*)&(l3_port->ovsrec_port_uuid)));
 
-  zebra_dump_formatted_string(ds,"     Port action is: %s", zebra_l3_port_cache_actions_str[
+  zebra_dump_formatted_string(ds,"     Port action is: %s\n", zebra_l3_port_cache_actions_str[
                               l3_port->port_action]);
-  zebra_dump_formatted_string(ds,"     Port state is: %s",
+  zebra_dump_formatted_string(ds,"     Port state is: %s\n",
                               l3_port->if_active ? "Active" : "Inactive");
 
-  zebra_dump_formatted_string(ds,"     Printing the IPv4 seconary address in the port");
+  zebra_dump_formatted_string(ds,"     Printing the IPv4 seconary address in the port\n");
 
   if (!shash_count(&(l3_port->ip4_address_secondary)))
-    zebra_dump_formatted_string(ds,"         No IPv4 seconary address in the port");
+    zebra_dump_formatted_string(ds,"         No IPv4 seconary address in the port\n");
   else
     {
       secondary_address_count = 0;
@@ -725,16 +759,16 @@ zebra_l3_port_node_print (struct ds *ds, struct zebra_l3_port* l3_port)
           ip_secondary_address = (char*)node->data;
           ++secondary_address_count;
 
-          zebra_dump_formatted_string(ds,"         %d. Address %s", secondary_address_count,
+          zebra_dump_formatted_string(ds,"         %d. Address %s\n", secondary_address_count,
                                       ip_secondary_address);
 
         }
     }
 
-  zebra_dump_formatted_string(ds,"     Printing the IPv4 connected route UUIDs in the port");
+  zebra_dump_formatted_string(ds,"     Printing the IPv4 connected route UUIDs in the port\n");
 
   if (!shash_count(&(l3_port->ip4_connected_routes_uuid)))
-    zebra_dump_formatted_string(ds,"         No IPv4 connected route UUIDs in the port");
+    zebra_dump_formatted_string(ds,"         No IPv4 connected route UUIDs in the port\n");
   else
     {
       route_uuid_count = 0;
@@ -755,17 +789,17 @@ zebra_l3_port_node_print (struct ds *ds, struct zebra_l3_port* l3_port)
           connected_route_uuid = (struct uuid*)node->data;
           ++route_uuid_count;
 
-          zebra_dump_formatted_string(ds,"         %d. IPv4 connected route UUID %s",
+          zebra_dump_formatted_string(ds,"         %d. IPv4 connected route UUID %s\n",
                                       route_uuid_count,
                                       zebra_dump_ovsdb_uuid(connected_route_uuid));
 
         }
     }
 
-  zebra_dump_formatted_string(ds,"     Printing the IPv6 seconary address in the port");
+  zebra_dump_formatted_string(ds,"     Printing the IPv6 seconary address in the port\n");
 
   if (!shash_count(&(l3_port->ip6_address_secondary)))
-    zebra_dump_formatted_string(ds,"         No IPv6 seconary address in the port");
+    zebra_dump_formatted_string(ds,"         No IPv6 seconary address in the port\n");
   else
     {
       secondary_address_count = 0;
@@ -786,18 +820,18 @@ zebra_l3_port_node_print (struct ds *ds, struct zebra_l3_port* l3_port)
           ip_secondary_address = (char*)node->data;
           ++secondary_address_count;
 
-          zebra_dump_formatted_string(ds,"         %d. Address %s",
+          zebra_dump_formatted_string(ds,"         %d. Address %s\n",
                                       secondary_address_count,
                                       ip_secondary_address);
 
         }
     }
 
-  zebra_dump_formatted_string(ds,"     Printing the IPv6 connected route UUIDs in the port");
+  zebra_dump_formatted_string(ds,"     Printing the IPv6 connected route UUIDs in the port\n");
 
   if (!shash_count(&(l3_port->ip6_connected_routes_uuid)))
     zebra_dump_formatted_string(ds,"         No IPv6 connected route"
-                                "UUIDs in the port");
+                                "UUIDs in the port\n");
   else
     {
       route_uuid_count = 0;
@@ -818,7 +852,7 @@ zebra_l3_port_node_print (struct ds *ds, struct zebra_l3_port* l3_port)
           connected_route_uuid = (struct uuid*)node->data;
           ++route_uuid_count;
 
-          zebra_dump_formatted_string(ds,"         %d. IPv6 connected route UUID %s",
+          zebra_dump_formatted_string(ds,"         %d. IPv6 connected route UUID %s\n",
                                       route_uuid_count,
                                       zebra_dump_ovsdb_uuid(connected_route_uuid));
 

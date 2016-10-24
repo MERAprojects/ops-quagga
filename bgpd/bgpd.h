@@ -356,6 +356,11 @@ struct peer
   int shared_network;		/* Is this peer shared same network. */
   struct bgp_nexthop nexthop;	/* Nexthop */
 
+#ifdef ENABLE_OVSDB
+  /* BFD section */
+  int bfd_status;	/* status of BFD session */
+#endif
+
   /* Peer address family configuration. */
   u_char afc[AFI_MAX][SAFI_MAX];
   u_char afc_nego[AFI_MAX][SAFI_MAX];
@@ -398,6 +403,9 @@ struct peer
 #define PEER_FLAG_DISABLE_CONNECTED_CHECK   (1 << 6) /* disable-connected-check */
 #define PEER_FLAG_LOCAL_AS_NO_PREPEND       (1 << 7) /* local-as no-prepend */
 #define PEER_FLAG_LOCAL_AS_REPLACE_AS       (1 << 8) /* local-as no-prepend replace-as */
+#ifdef ENABLE_OVSDB
+#define PEER_FLAG_BFD                       (1 << 9) /* fall-over bfd */
+#endif
 
   /* NSF mode (graceful restart) */
   u_char nsf[AFI_MAX][SAFI_MAX];
@@ -747,7 +755,11 @@ struct bgp_nlri
 #define BGP_EVENTS_MAX                          15
 
 /* BGP timers default value.  */
+#ifndef ENABLE_OVSDB
 #define BGP_INIT_START_TIMER                     5
+#else
+#define BGP_INIT_START_TIMER                    10
+#endif
 #define BGP_ERROR_START_TIMER                   30
 #define BGP_DEFAULT_HOLDTIME                   180
 #define BGP_DEFAULT_KEEPALIVE                   60 

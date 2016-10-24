@@ -20,6 +20,7 @@ from ospf_configs import wait_for_adjacency, wait_for_route_distance
 from ospf_configs import unconfigure_interface, unconfigure_ospf_router
 from ospf_configs import wait_for_best_route, verify_ip_route
 from pytest import fixture
+from interface_utils import verify_turn_on_interfaces
 
 
 TOPOLOGY = """
@@ -71,6 +72,9 @@ def configuration(topology, request):
     # Configuring ip address for sw2 and sw3
     configure_interface(sw1, SW1_INTF1, SW1_INTF1_IPV4_ADDR)
     configure_interface(sw2, SW2_INTF1, SW2_INTF1_IPV4_ADDR)
+
+    verify_turn_on_interfaces(sw1, sw1.ports[SW1_INTF1])
+    verify_turn_on_interfaces(sw2, sw2.ports[SW2_INTF1])
 
     # Configuring ospf with network command in sw2 and sw3
     configure_ospf_router(sw1, SW1_ROUTER_ID, OSPF_NETWRK_ADDR, OSPF_AREA_1)
@@ -145,7 +149,7 @@ def test_ospf_best_route(topology, configuration, step):
 
     step('######step 7 - Verifying static route from show running config'
          ' ######')
-    retval = verify_ip_route(sw1, '192.168.1.0', '24', '1 100')
+    retval = verify_ip_route(sw1, '192.168.1.0', '24', '1')
     if retval is True:
         step('Static route 192.168.1.0/24 updated in running configuration')
     else:
