@@ -106,8 +106,6 @@ ospf_router_id_update (struct ospf *ospf)
     router_id = ospf->router_id_static;
   else if (ospf->router_id.s_addr != 0)
     router_id = ospf->router_id;
-  else
-    router_id = router_id_zebra;
 
   ospf->router_id = router_id;
 
