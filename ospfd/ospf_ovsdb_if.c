@@ -277,6 +277,7 @@ ospf_ovsdb_tables_init()
    /* Add VRF columns */
     ovsdb_idl_add_table(idl, &ovsrec_table_vrf);
     ovsdb_idl_add_column(idl, &ovsrec_vrf_col_name);
+    ovsdb_idl_add_column(idl, &ovsrec_vrf_col_active_router_id);
     ovsdb_idl_add_column(idl, &ovsrec_vrf_col_ospf_routers);
     ovsdb_idl_add_column(idl, &ovsrec_vrf_col_ports);
 
@@ -968,31 +969,76 @@ int ovsdb_options_count(u_char options_val)
 }
 
 int
+ovsdb_ospf_router_set_router_id(const struct ovsrec_ospf_router *ovs_ospf_router,
+    const char *active_router_id)
+{
+    struct smap smap = SMAP_INITIALIZER (&smap);
+    struct ovsdb_idl_txn *ospf_router_txn;
+    enum ovsdb_idl_txn_status status;
+
+    ospf_router_txn = ovsdb_idl_txn_create (idl);
+    if (!ospf_router_txn) {
+       VLOG_ERR ("Transaction create failed");
+       return 1;
+    }
+
+    smap_clone (&smap, &ovs_ospf_router->router_id);
+    smap_replace (&smap, OSPF_KEY_ROUTER_ID_VAL, active_router_id);
+    smap_replace (&smap, OSPF_KEY_ROUTER_ID_STATIC, "false");
+    ovsrec_ospf_router_set_router_id (ovs_ospf_router, &smap);
+    smap_destroy (&smap);
+
+    status = ovsdb_idl_txn_commit_block (ospf_router_txn);
+    if (status != TXN_SUCCESS && status != TXN_UNCHANGED) {
+        VLOG_ERR ("Transaction commit failed: %d", status);
+        return 1;
+    }
+    ovsdb_idl_txn_destroy (ospf_router_txn);
+    return 0;
+}
+
+int
 modify_ospf_router_id_config (struct ospf *ospf_cfg,
     const struct ovsrec_ospf_router *ospf_mod_row)
 {
+    const struct ovsrec_vrf *ovs_vrf;
     bool router_id_static = false;
-    char* router_ip = NULL;
+    char *router_id = NULL;
+    char *active_router_id = NULL;
     struct in_addr addr;
 
-    memset (&addr,0,sizeof(addr));
-    router_ip = smap_get(&(ospf_mod_row->router_id),"router_id_val");
+    memset (&addr, 0, sizeof(addr));
+    router_id = smap_get (&(ospf_mod_row->router_id), "router_id_val");
+    router_id_static = smap_get_bool (&(ospf_mod_row->router_id), "router_id_static", false);
 
-    if (router_ip)
-    {
-        if(0 == inet_aton(router_ip,&addr))
-            VLOG_DBG ("Unable to convert Router id");
+    if (!router_id_static) {
+        OVSREC_VRF_FOR_EACH (ovs_vrf, idl) {
+            if (!strcmp (ovs_vrf->name, DEFAULT_VRF_NAME)) {
+               active_router_id = ovs_vrf->active_router_id;
+            }
+        }
+
+        if (router_id && !strcmp (router_id, active_router_id)) {
+            return 0;
+        }
+
+        ovsdb_ospf_router_set_router_id(ospf_mod_row, active_router_id);
+        inet_aton (active_router_id, &addr);
+    }
+    else {
+        inet_aton (router_id, &addr);
     }
 
-    router_id_static = smap_get_bool(&(ospf_mod_row->router_id),"router_id_static",false);
+    if (!addr.s_addr) {
+        VLOG_DBG ("Unable to convert router-id");
+    }
 
     if (router_id_static)
         ospf_cfg->router_id_static.s_addr = addr.s_addr;
     else
         ospf_cfg->router_id.s_addr = addr.s_addr;
 
-    ospf_router_id_update(ospf_cfg);
-
+    ospf_router_id_update (ospf_cfg);
     return 0;
 }
 
@@ -3622,7 +3668,8 @@ modify_ospf_router_instance(struct ovsdb_idl *idl,
     }
 
     /* Check if router_id is modified */
-    if (OVSREC_IDL_IS_COLUMN_MODIFIED(ovsrec_ospf_router_col_router_id, idl_seqno)) {
+    if (OVSREC_IDL_IS_COLUMN_MODIFIED(ovsrec_ospf_router_col_router_id, idl_seqno) ||
+            OVSREC_IDL_IS_COLUMN_MODIFIED(ovsrec_vrf_col_active_router_id, idl_seqno)) {
         ret_status = modify_ospf_router_id_config(ospf_instance, ovs_ospf);
         if (!ret_status) {
             VLOG_DBG("OSPF router_id set to %s", inet_ntoa(ospf_instance->router_id));
