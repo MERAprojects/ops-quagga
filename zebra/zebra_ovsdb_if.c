@@ -536,7 +536,7 @@ zebra_if_cached_port_and_ovsrec_port_ip6_addr_change (
    * If the OVSDB port primary address and L3 port primary address
    * are not same, then return 'true'.
    */
-  if (strcmp(port->ip6_address, l3_port->ip6_address) != 0)
+  if (ip_addr_is_equal_af(AF_INET6, port->ip6_address, l3_port->ip6_address))
     return(true);
 
   /*
@@ -1508,7 +1508,7 @@ zebra_reconfigure_primary_addresses (
                                                is_v4,
                                                l3_port);
         }
-      else if (strcmp(ovsrec_port_primary_address, *l3_port_primary_address))
+      else if (ip_addr_is_equal_af(is_v4 ? AF_INET : AF_INET6, ovsrec_port_primary_address, *l3_port_primary_address))
         {
           /*
            * If the L3 port node primary address is not same as the OVSDB
@@ -5756,7 +5756,7 @@ void zebra_delete_route_nexthop_addr_from_db (struct rib *route,
            * Check if the nexthop_str is same as the next-hop IP
            * address.
            */
-          if (strcmp(nexthop_str, nh_row->ip_address) == 0)
+          if (ip_addr_is_equal(nexthop_str, nh_row->ip_address))
             {
               VLOG_DBG("Found the nexthop match");
               found_nexthop_addr[next_hop_index] = true;
@@ -6153,7 +6153,7 @@ void zebra_update_selected_nh (struct route_node *rn, struct rib *route,
            */
           if (nh_addr && nh_row->ip_address)
             {
-              if (strcmp(nh_row->ip_address, nh_addr) == 0)
+              if (ip_addr_is_equal(nh_row->ip_address, nh_addr))
                 {
                   VLOG_DBG("Found a match with the nh address %s",
                             nh_row->ip_address);
