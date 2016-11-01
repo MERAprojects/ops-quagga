@@ -2397,6 +2397,24 @@ daemon_neighbor_aspath_filter_cmd_execute(struct bgp *bgp, char *peer_str,
     }
 }
 
+int
+daemon_neighbor_weight_cmd_execute (struct bgp *bgp, const char *peer_str,
+                                    const uint16_t weight)
+{
+  struct peer *peer;
+
+  peer = bgp_peer_and_group_lookup (bgp, peer_str);
+  if (!peer) {
+    VLOG_ERR ("Peer/peer-group not found");
+    return CMD_WARNING;
+  }
+
+  VLOG_DBG("Updating peer %s weight to %d", peer->host, weight);
+  peer_weight_set (peer, weight);
+
+  return CMD_SUCCESS;
+}
+
 #if 0
 /* neighbor shutdown. */
 DEFUN (neighbor_shutdown,
