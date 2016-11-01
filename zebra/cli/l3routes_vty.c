@@ -136,7 +136,7 @@ port_find_ipaddress (const struct ovsrec_port *port_row, char * ip_entry,
               strncpy(ip6_addrcopy, port_row->ip6_address,
                       sizeof(ip6_addrcopy));
               ipv6_address = strtok(ip6_addrcopy, "/");
-              if (!strcmp (ipv6_address, ip_entry))
+              if (ip_addr_is_equal_af (AF_INET6, ipv6_address, ip_entry))
                 {
                   vty_out(vty, "\nThe nexthop address %s is locally assigned "
                           "to interface %s as its primary ipv6 address%s",
@@ -152,7 +152,7 @@ port_find_ipaddress (const struct ovsrec_port *port_row, char * ip_entry,
                   strncpy(ip6_addrcopy, port_row->ip6_address_secondary[index],
                          sizeof(ip6_addrcopy));
                   ipv6_address = strtok(ip6_addrcopy, "/");
-                  if (!strcmp (ipv6_address, ip_entry))
+                  if (ip_addr_is_equal_af (AF_INET6, ipv6_address, ip_entry))
                     {
                       vty_out(vty, "\nThe nexthop address %s is locally "
                               "assigned to interface %s as its secondary ipv6 "
@@ -591,7 +591,7 @@ ip_route_common (struct vty *vty, char **argv, char *distance)
             {
               if (row->nexthops[i]->ip_address != NULL)
                 {
-                  if (!strcmp (row->nexthops[i]->ip_address, argv[1]))
+                  if (ip_addr_is_equal_af (AF_INET, row->nexthops[i]->ip_address, argv[1]))
                     {
                       nh_match = true;
                       break;
@@ -1211,7 +1211,7 @@ ipv6_route_common (struct vty *vty, char **argv, char *distance)
             {
               if (row->nexthops[i]->ip_address != NULL)
                 {
-                  if (!strcmp (row->nexthops[i]->ip_address, argv[1]))
+                  if (ip_addr_is_equal_af (AF_INET6, row->nexthops[i]->ip_address, argv[1]))
                     {
                       nh_match = true;
                       break;
@@ -1701,12 +1701,12 @@ int route_prefix_comparator(const void *route_entry1,
                             const void *route_entry2) {
     struct ovsrec_route *route_row1, *route_row2;
     char ipaddr1_copy[MAX_ADDRESS_LEN], ipaddr2_copy[MAX_ADDRESS_LEN];
-    char * ip1 = NULL;
-    char * ip2 = NULL;
+    char * ip_str1 = NULL;
+    char * ip_str2 = NULL;
     char * prefixlen1 = NULL;
     char * prefixlen2 = NULL;
-    struct in6_addr ipv6_str1;
-    struct in6_addr ipv6_str2;
+    struct in6_addr ipv6_addr1;
+    struct in6_addr ipv6_addr2;
     bool is_ipv6_prefix1_valid = false;
     bool is_ipv6_prefix2_valid = false;
     int strcmp_result;
@@ -1725,10 +1725,10 @@ int route_prefix_comparator(const void *route_entry1,
     }
 
     /* Separating the prefix and the prefix lengths for comparison */
-    ip1 = strtok(ipaddr1_copy, "/");
+    ip_str1 = strtok(ipaddr1_copy, "/");
     prefixlen1 = strtok(NULL, "/");
 
-    ip2 = strtok(ipaddr2_copy, "/");
+    ip_str2 = strtok(ipaddr2_copy, "/");
     prefixlen2 = strtok(NULL, "/");
 
     /* Handle the specific case of IPv6 prefixes in compressed form.
@@ -1740,20 +1740,20 @@ int route_prefix_comparator(const void *route_entry1,
      * "1::/128" in the ipv6_prefix_compare() function. Internally '::/128' is
      * represented as '0:0:0:0:0:0:0:0' which should appear before '1::/128 in
      * the 'show commands' */
-    if (inet_pton (AF_INET6, ip1, &ipv6_str1)) {
+    if (inet_pton (AF_INET6, ip_str1, &ipv6_addr1)) {
         is_ipv6_prefix1_valid = true;
     }
 
-    if (inet_pton (AF_INET6, ip2, &ipv6_str2)) {
+    if (inet_pton (AF_INET6, ip_str2, &ipv6_addr2)) {
         is_ipv6_prefix2_valid = true;
     }
 
     /* Caching the strcmp result */
-    if (ip1 && ip2) {
+    if (ip_str1 && ip_str2) {
         if (is_ipv6_prefix1_valid && is_ipv6_prefix2_valid) {
-            strcmp_result = ipv6_prefix_compare(&ipv6_str1, &ipv6_str2);
+            strcmp_result = IPV6_ADDR_CMP(&ipv6_addr1, &ipv6_addr2);
         } else {
-            strcmp_result = strcmp(ip1, ip2);
+            strcmp_result = strcmp(ip_str1, ip_str2);
         }
     }
 

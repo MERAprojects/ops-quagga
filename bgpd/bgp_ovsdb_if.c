@@ -1996,7 +1996,7 @@ get_bgp_neighbor_with_VrfName_BgpRouterAsn_Ipaddr (struct ovsdb_idl *idl,
             }
             ovs_bgp = ovs_vrf->value_bgp_routers[i];
             for (j = 0; j < ovs_bgp->n_bgp_neighbors; j++) {
-                if (0 == strcmp(ipaddr, ovs_bgp->key_bgp_neighbors[j])) {
+                if (ip_addr_is_equal(ipaddr, ovs_bgp->key_bgp_neighbors[j])) {
                     return ovs_bgp->value_bgp_neighbors[j];
                 }
             }
