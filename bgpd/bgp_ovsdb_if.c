@@ -344,6 +344,7 @@ bgp_ovsdb_tables_init (struct ovsdb_idl *idl)
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_passive);
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_password);
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_timers);
+    ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_negotiated_timers);
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_route_maps);
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_prefix_lists);
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_col_aspath_filters);
@@ -2099,6 +2100,8 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
     struct ovsdb_idl_txn *db_txn;
     enum ovsdb_idl_txn_status status;
     struct smap smap;
+    int64_t value_timers[2];
+    char *key_timers[2];
 
     ovs_bgp_neighbor_ptr = get_bgp_neighbor_db_row(peer);
     if (NULL == ovs_bgp_neighbor_ptr) {
@@ -2148,6 +2151,16 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
         ovs_bgp_neighbor_ptr, peer);
     VLOG_DBG("updated stats also\n");
     }
+
+    /* Update per-neighbor negotiated timers */
+    key_timers[0] = OVSDB_BGP_TIMER_KEEPALIVE;
+    key_timers[1] = OVSDB_BGP_TIMER_HOLDTIME;
+    value_timers[0] = (int64_t)peer->v_keepalive;
+    value_timers[1] = (int64_t)peer->v_holdtime;
+    VLOG_DBG("Updating BGP neighbor timers keepalive to %ld, holdtime to %ld",
+        value_timers[0], value_timers[1]);
+    ovsrec_bgp_neighbor_set_negotiated_timers(ovs_bgp_neighbor_ptr,
+        key_timers, value_timers, 2);
 
     status = ovsdb_idl_txn_commit(db_txn);
     VLOG_DBG("%s OVSDB Neighbour update status is %s", __FUNCTION__,
