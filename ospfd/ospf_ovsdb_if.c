@@ -3377,7 +3377,7 @@ ovsdb_ospf_add_route_nexthops (const struct ovsdb_idl_txn *txn,
             len_str = strlen( temp_str);
             ovsrec_nexthop_set_ip_address(pnexthop, nexthop_buf);
         }
-        if (path->ifindex != 0)
+        else if (path->ifindex != 0)
         {
             ifname = ifindex2ifname(path->ifindex);
             if (ifname)
