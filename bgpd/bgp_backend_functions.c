@@ -2539,6 +2539,7 @@ peer_af_flag_modify_bgp (struct bgp *bgp, const char *peer_str, afi_t afi,
 }
 
 static int
+
 peer_af_flag_set_vty (struct vty *vty, const char *peer_str, afi_t afi,
 		      safi_t safi, u_int32_t flag)
 {
@@ -2546,6 +2547,7 @@ peer_af_flag_set_vty (struct vty *vty, const char *peer_str, afi_t afi,
 }
 
 static int
+
 peer_af_flag_unset_vty (struct vty *vty, const char *peer_str, afi_t afi,
                         safi_t safi, u_int32_t flag)
 {
@@ -2560,6 +2562,16 @@ daemon_neighbor_remove_private_as_cmd_execute (struct bgp *bgp, char *peer_str,
     VLOG_DBG("Modifying neighbor %s remove private AS", peer_str);
     return peer_af_flag_modify_bgp(bgp, peer_str, afi, safi,
                                    PEER_FLAG_REMOVE_PRIVATE_AS, private_as);
+}
+
+int
+daemon_neighbor_next_hop_self_cmd_execute (struct bgp *bgp, char *peer_str,
+                                           afi_t afi, safi_t safi,
+                                           bool next_hop_self)
+{
+    VLOG_DBG("Modifying neighbor %s next-hop-self", peer_str);
+    return peer_af_flag_modify_bgp(bgp, peer_str, afi, safi,
+                                   PEER_FLAG_NEXTHOP_SELF, next_hop_self);
 }
 
 
