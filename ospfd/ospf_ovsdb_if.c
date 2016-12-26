@@ -368,6 +368,7 @@ ospf_ovsdb_tables_init()
     ovsdb_idl_add_column(idl, &ovsrec_port_col_other_config);
     ovsdb_idl_add_column(idl, &ovsrec_port_col_statistics);
     ovsdb_idl_add_column(idl, &ovsrec_port_col_status);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_kernel_interface_ready);
 
     /* Add OSPF_Area columns */
     ovsdb_idl_add_table(idl, &ovsrec_table_ospf_area);
@@ -1351,7 +1352,7 @@ ovsdb_ospf_add_lsa  (struct ospf_lsa* lsa)
 
             lsa_age = lsa->data->ls_age;
             ls_birth_time = time(NULL);
-            ls_birth_time = (ls_birth_time > 0) ? ls_birth_time - lsa_age : 0;
+            ls_birth_time = (ls_birth_time > lsa_age) ? ls_birth_time - lsa_age : 0;
             ovsrec_ospf_lsa_set_ls_birth_time(new_lsas, ls_birth_time);
 
             ovsrec_ospf_lsa_set_prefix (new_lsas, "0.0.0.0");
@@ -1396,7 +1397,7 @@ ovsdb_ospf_add_lsa  (struct ospf_lsa* lsa)
 
             lsa_age = lsa->data->ls_age;
             ls_birth_time = time(NULL);
-            ls_birth_time = (ls_birth_time > 0) ? ls_birth_time - lsa_age : 0;
+            ls_birth_time = (ls_birth_time > lsa_age) ? ls_birth_time - lsa_age : 0;
             ovsrec_ospf_lsa_set_ls_birth_time(new_lsas, ls_birth_time);
 
             ovsrec_ospf_lsa_set_prefix (new_lsas, "0.0.0.0");  //change to prefix as its type 3
@@ -3383,7 +3384,7 @@ ovsdb_ospf_add_route_nexthops (const struct ovsdb_idl_txn *txn,
             len_str = strlen( temp_str);
             ovsrec_nexthop_set_ip_address(pnexthop, nexthop_buf);
         }
-        if (path->ifindex != 0)
+        else if (path->ifindex != 0)
         {
             ifname = ifindex2ifname(path->ifindex);
             if (ifname)
@@ -6435,8 +6436,9 @@ ospf_interface_add_from_ovsdb (struct ovsdb_idl *idl, const struct ovsrec_vrf *o
   if (ifp) {
     ifindex = if_nametoindex(ifp->name);
     if (ifindex == IFINDEX_INTERNAL) {
-      VLOG_ERR ("Interface %s created - Failed to get ifindex\n", ifp->name);
-      //return -1;
+      VLOG_DBG ("Interface %s not created - failed to get ifindex\n", ifp->name);
+      if_delete(ifp);
+      return -1;
     }
     ifp->ifindex = ifindex;
     VLOG_DBG ("Interface %s created - ifindex:%u\n", ifp->name, ifp->ifindex);
@@ -6530,24 +6532,37 @@ ospf_interface_update_from_ovsdb (struct ovsdb_idl *idl, const struct ovsrec_vrf
   struct listnode *node, *nextnode;
   struct prefix p;
   struct prefix *pfxlist = NULL, *pfx = NULL;
+  int result;
+  bool force_config = false; /* do parameters reconfiguration even they are not updated */
 
   ifp = if_lookup_by_name_len (ovs_port->name, strnlen(ovs_port->name, INTERFACE_NAMSIZ));
 
   if (ifp) {
-    if (ifp->ifindex == IFINDEX_INTERNAL) {
-      VLOG_ERR ("Interface %s is present - ifindex is %u\n", ifp->name, ifp->ifindex);
-      return -1;
-    }
-    VLOG_INFO ("Interface %s present - ifindex:%u\n", ifp->name, ifp->ifindex);
+    VLOG_DBG ("Interface %s present - ifindex:%u\n", ifp->name, ifp->ifindex);
   }
   else {
-    VLOG_ERR ("No interface present with ifname %s\n", ovs_port->name);
-    return -1;
+    VLOG_DBG ("No interface present with ifname %s - try to create.\n", ovs_port->name);
+    result = ospf_interface_add_from_ovsdb (idl, ovs_vrf, ovs_port);
+    if (result == 0) {
+      ifp = if_lookup_by_name_len (ovs_port->name, strnlen(ovs_port->name, INTERFACE_NAMSIZ));
+      if (ifp) {
+        VLOG_DBG ("Interface %s present - ifindex:%u\n", ifp->name, ifp->ifindex);
+        force_config = true;
+      }
+      else {
+        VLOG_ERR ("No interface present with ifname %s\n", ovs_port->name);
+        return -1;
+      }
+    }
+    else {
+      VLOG_DBG ("No interface present with ifname %s\n", ovs_port->name);
+      return -1;
+    }
   }
 
   ospf_interface_state_update_from_ovsdb (idl, ovs_port, NULL, ifp);
 
-  if (OVSREC_IDL_IS_COLUMN_MODIFIED (ovsrec_port_col_ip4_address, idl_seqno)) {
+  if (force_config || OVSREC_IDL_IS_COLUMN_MODIFIED (ovsrec_port_col_ip4_address, idl_seqno)) {
     if (ovs_port->ip4_address) {
       if (ovs_port->ip4_address && str2prefix (ovs_port->ip4_address, &p)) {
         if (ifc = connected_lookup_address (ifp, p.u.prefix4)) {
@@ -6578,7 +6593,7 @@ ospf_interface_update_from_ovsdb (struct ovsdb_idl *idl, const struct ovsrec_vrf
     }
   }
 
-  if (OVSREC_IDL_IS_COLUMN_MODIFIED (ovsrec_port_col_ip4_address_secondary, idl_seqno)) {
+  if (force_config || OVSREC_IDL_IS_COLUMN_MODIFIED (ovsrec_port_col_ip4_address_secondary, idl_seqno)) {
     pfxlist = XCALLOC (MTYPE_PREFIX, sizeof(struct prefix) * ovs_port->n_ip4_address_secondary);
     if (!pfxlist) {
       VLOG_ERR ("Memory alloc Error\n");
