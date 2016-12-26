@@ -1267,6 +1267,7 @@ ovsdb_ospf_add_lsa  (struct ospf_lsa* lsa)
     int64_t lsa_area_id = 0;
     int64_t lsa_id = 0;
     int64_t lsa_age = 0;
+    int64_t ls_birth_time = 0;
     int64_t lsa_adv_router = 0;
     int64_t lsa_chksum = 0;
     int64_t lsa_seqnum = 0;
@@ -1349,7 +1350,9 @@ ovsdb_ospf_add_lsa  (struct ospf_lsa* lsa)
             ovsrec_ospf_lsa_set_ls_id (new_lsas,lsa_id);
 
             lsa_age = lsa->data->ls_age;
-            ovsrec_ospf_lsa_set_ls_birth_time(new_lsas, lsa_age);
+            ls_birth_time = time(NULL);
+            ls_birth_time = (ls_birth_time > 0) ? ls_birth_time - lsa_age : 0;
+            ovsrec_ospf_lsa_set_ls_birth_time(new_lsas, ls_birth_time);
 
             ovsrec_ospf_lsa_set_prefix (new_lsas, "0.0.0.0");
 
@@ -1390,8 +1393,12 @@ ovsdb_ospf_add_lsa  (struct ospf_lsa* lsa)
                                             lsa_str[lsa->data->type].lsa_type_str);
             lsa_id = lsa->data->id.s_addr;
             ovsrec_ospf_lsa_set_ls_id (new_lsas,lsa_id);
+
             lsa_age = lsa->data->ls_age;
-            ovsrec_ospf_lsa_set_ls_birth_time (new_lsas, lsa_age);
+            ls_birth_time = time(NULL);
+            ls_birth_time = (ls_birth_time > 0) ? ls_birth_time - lsa_age : 0;
+            ovsrec_ospf_lsa_set_ls_birth_time(new_lsas, ls_birth_time);
+
             ovsrec_ospf_lsa_set_prefix (new_lsas, "0.0.0.0");  //change to prefix as its type 3
             lsa_adv_router = lsa->data->adv_router.s_addr;
             ovsrec_ospf_lsa_set_adv_router (new_lsas,lsa_adv_router);
