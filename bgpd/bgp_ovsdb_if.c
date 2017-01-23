@@ -397,6 +397,10 @@ bgp_ovsdb_tables_init (struct ovsdb_idl *idl)
     ovsdb_idl_add_table(idl, &ovsrec_table_bgp_neighbor_af);
     ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_af_col_next_hop_self);
 
+    /* BGP neighbor AF table. */
+    ovsdb_idl_add_table(idl, &ovsrec_table_bgp_neighbor_af);
+    ovsdb_idl_add_column(idl, &ovsrec_bgp_neighbor_af_col_next_hop_self);
+
     /* BGP policy */
     bgp_policy_ovsdb_init(idl);
 
