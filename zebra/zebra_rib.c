@@ -1717,11 +1717,11 @@ static bool compare_route_node_with_shadow_route_node (struct route_node* rn,
       return(false);
     }
 
-  if (!zebra_cleanup_kernel_after_restart)
-    {
-      VLOG_DBG("zebra already completed restart");
-      return(false);
-    }
+//  if (!zebra_cleanup_kernel_after_restart)
+//    {
+//      VLOG_DBG("zebra already completed restart");
+//      return(false);
+//    }
 
   p = rn->p;
 
