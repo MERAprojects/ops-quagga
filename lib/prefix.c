@@ -903,26 +903,4 @@ inet6_ntoa (struct in6_addr addr)
   inet_ntop (AF_INET6, &addr, buf, INET6_ADDRSTRLEN);
   return buf;
 }
-
-int
-ip_addr_is_equal (const char *addr_str1, const char *addr_str2) {
-  int af;
-
-  af = ((strstr(addr_str1, ":") != NULL) ? AF_INET6 : AF_INET);
-  return ip_addr_is_equal_af(af, addr_str1, addr_str2);
-}
-
-int
-ip_addr_is_equal_af (int af, const char *addr_str1, const char *addr_str2) {
-  struct in6_addr addr1, addr2;
-
-  if (af == AF_INET) {
-    return !strcmp(addr_str1, addr_str2);
-  }
-  else if (inet_pton(AF_INET6, addr_str1, &addr1) && inet_pton(AF_INET6, addr_str2, &addr2)) {
-    return !IPV6_ADDR_CMP(&addr1, &addr2);
-  }
-  return 0;
-}
-
 #endif /* HAVE_IPV6 */

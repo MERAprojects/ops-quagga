@@ -219,8 +219,6 @@ extern void masklen2ip6 (const int, struct in6_addr *);
 
 extern void str2in6_addr (const char *, struct in6_addr *);
 extern const char *inet6_ntoa (struct in6_addr);
-extern int ip_addr_is_equal (const char *, const char *);
-extern int ip_addr_is_equal_af (int, const char *, const char *);
 
 #endif /* HAVE_IPV6 */
 

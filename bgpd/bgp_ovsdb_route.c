@@ -398,7 +398,7 @@ bgp_ovsdb_lookup_nexthop(char *ip)
     OVSREC_NEXTHOP_FOR_EACH(row, idl) {
         if (row->ip_address)
         {
-            if (ip_addr_is_equal(ip, row->ip_address)) {
+            if (strcmp(ip, row->ip_address) == 0) {
                 /* Match */
                 return row;
             }
@@ -417,7 +417,7 @@ bgp_ovsdb_lookup_local_nexthop(char *ip)
     OVSREC_BGP_NEXTHOP_FOR_EACH(row, idl) {
         if (row->ip_address)
         {
-            if (ip_addr_is_equal(ip, row->ip_address)) {
+            if (strcmp(ip, row->ip_address) == 0) {
                 /* Match */
                 return row;
             }
