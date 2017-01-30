@@ -1984,7 +1984,7 @@ rib_process (struct route_node *rn)
                * Check if for this route and its rib entry, kernel leanred
                * rib entry needs to be cleaned up.
                */
-              if (!compare_route_node_with_shadow_route_node(rn, select))
+/*              if (!compare_route_node_with_shadow_route_node(rn, select)) */
                 rib_install_kernel (rn, select);
 
               zebra_update_selected_route_nexthops_to_db(rn, select,
@@ -2073,7 +2073,7 @@ rib_process (struct route_node *rn)
       if (! RIB_SYSTEM_ROUTE (select))
         {
 #ifdef ENABLE_OVSDB
-          if (!compare_route_node_with_shadow_route_node(rn, select))
+/*          if (!compare_route_node_with_shadow_route_node(rn, select)) */
             rib_install_kernel (rn, select);
 
           zebra_update_selected_route_nexthops_to_db(rn, select,
