@@ -2523,8 +2523,7 @@ rib_unlink (struct route_node *rn, struct rib *rib)
 static void
 rib_delnode (struct route_node *rn, struct rib *rib)
 {
-  if (IS_ZEBRA_DEBUG_RIB)
-    rnode_debug (rn, "rn %p, rib %p, removing", rn, rib);
+  rnode_debug (rn, "rn %p, rib %p, removing", rn, rib);
   SET_FLAG (rib->status, RIB_ENTRY_REMOVED);
   rib_queue_add (&zebrad, rn);
 }
@@ -2540,6 +2539,7 @@ rib_add_ipv4 (int type, int flags, struct prefix_ipv4 *p,
   struct route_table *table;
   struct route_node *rn;
   struct nexthop *nexthop;
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP, safi, 0);
@@ -2620,14 +2620,14 @@ rib_add_ipv4 (int type, int flags, struct prefix_ipv4 *p,
       SET_FLAG (nexthop->flags, NEXTHOP_FLAG_FIB);
 
   /* Link new rib to node.*/
-  if (IS_ZEBRA_DEBUG_RIB)
+//  if (IS_ZEBRA_DEBUG_RIB)
     zlog_debug ("%s: calling rib_addnode (%p, %p)", __func__, rn, rib);
   rib_addnode (rn, rib);
 
   /* Free implicit route.*/
   if (same)
   {
-    if (IS_ZEBRA_DEBUG_RIB)
+//    if (IS_ZEBRA_DEBUG_RIB)
       zlog_debug ("%s: calling rib_delnode (%p, %p)", __func__, rn, rib);
     rib_delnode (rn, same);
   }
@@ -2803,6 +2803,7 @@ rib_add_ipv4_multipath (struct prefix_ipv4 *p, struct rib *rib, safi_t safi)
   struct route_node *rn;
   struct rib *same;
   struct nexthop *nexthop;
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP, safi, 0);
@@ -2846,7 +2847,7 @@ rib_add_ipv4_multipath (struct prefix_ipv4 *p, struct rib *rib, safi_t safi)
   /* Link new rib to node.*/
   VLOG_DBG("%s:Adding the route node",__func__);
   rib_addnode (rn, rib);
-  if (IS_ZEBRA_DEBUG_RIB)
+//  if (IS_ZEBRA_DEBUG_RIB)
   {
     zlog_debug ("%s: called rib_addnode (%p, %p) on new RIB entry",
       __func__, rn, rib);
@@ -2856,7 +2857,7 @@ rib_add_ipv4_multipath (struct prefix_ipv4 *p, struct rib *rib, safi_t safi)
   /* Free implicit route.*/
   if (same)
   {
-    if (IS_ZEBRA_DEBUG_RIB)
+//    if (IS_ZEBRA_DEBUG_RIB)
     {
       zlog_debug ("%s: calling rib_delnode (%p, %p) on existing RIB entry",
         __func__, rn, same);
@@ -2884,6 +2885,7 @@ rib_delete_ipv4 (int type, int flags, struct prefix_ipv4 *p,
   int recursing;
   char buf1[INET_ADDRSTRLEN];
   char buf2[INET_ADDRSTRLEN];
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP, safi, 0);
@@ -2893,7 +2895,7 @@ rib_delete_ipv4 (int type, int flags, struct prefix_ipv4 *p,
   /* Apply mask. */
   apply_mask_ipv4 (p);
 
-  if (IS_ZEBRA_DEBUG_KERNEL)
+//  if (IS_ZEBRA_DEBUG_KERNEL)
     {
       if (gate)
 	zlog_debug ("rib_delete_ipv4(): route delete %s/%d via %s ifindex %d",
@@ -2912,7 +2914,7 @@ rib_delete_ipv4 (int type, int flags, struct prefix_ipv4 *p,
   rn = route_node_lookup (table, (struct prefix *) p);
   if (! rn)
     {
-      if (IS_ZEBRA_DEBUG_KERNEL)
+//      if (IS_ZEBRA_DEBUG_KERNEL)
 	{
 	  if (gate)
 	    zlog_debug ("route %s/%d via %s ifindex %d doesn't exist in rib",
@@ -2987,7 +2989,7 @@ rib_delete_ipv4 (int type, int flags, struct prefix_ipv4 *p,
 	}
       else
 	{
-	  if (IS_ZEBRA_DEBUG_KERNEL)
+//	  if (IS_ZEBRA_DEBUG_KERNEL)
 	    {
 	      if (gate)
 		zlog_debug ("route %s/%d via %s ifindex %d type %d doesn't exist in rib",
@@ -3154,6 +3156,7 @@ static_uninstall_ipv4 (safi_t safi, struct prefix *p, struct static_ipv4 *si)
   struct rib *rib;
   struct nexthop *nexthop;
   struct route_table *table;
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP, safi, 0);
@@ -3391,6 +3394,7 @@ rib_add_ipv6 (int type, int flags, struct prefix_ipv6 *p,
   struct route_table *table;
   struct route_node *rn;
   struct nexthop *nexthop;
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP6, safi, 0);
@@ -3465,7 +3469,7 @@ rib_add_ipv6 (int type, int flags, struct prefix_ipv6 *p,
 
   /* Link new rib to node.*/
   rib_addnode (rn, rib);
-  if (IS_ZEBRA_DEBUG_RIB)
+//  if (IS_ZEBRA_DEBUG_RIB)
   {
     zlog_debug ("%s: called rib_addnode (%p, %p) on new RIB entry",
       __func__, rn, rib);
@@ -3475,7 +3479,7 @@ rib_add_ipv6 (int type, int flags, struct prefix_ipv6 *p,
   /* Free implicit route.*/
   if (same)
   {
-    if (IS_ZEBRA_DEBUG_RIB)
+//    if (IS_ZEBRA_DEBUG_RIB)
     {
       zlog_debug ("%s: calling rib_delnode (%p, %p) on existing RIB entry",
         __func__, rn, same);
@@ -3502,6 +3506,7 @@ rib_delete_ipv6 (int type, int flags, struct prefix_ipv6 *p,
   int recursing;
   char buf1[INET6_ADDRSTRLEN];
   char buf2[INET6_ADDRSTRLEN];
+  rnode_debug (NULL, "Enter");
 
   /* Apply mask. */
   apply_mask_ipv6 (p);
@@ -3515,7 +3520,7 @@ rib_delete_ipv6 (int type, int flags, struct prefix_ipv6 *p,
   rn = route_node_lookup (table, (struct prefix *) p);
   if (! rn)
     {
-      if (IS_ZEBRA_DEBUG_KERNEL)
+//      if (IS_ZEBRA_DEBUG_KERNEL)
 	{
 	  if (gate)
 	    zlog_debug ("route %s/%d via %s ifindex %d doesn't exist in rib",
@@ -3591,7 +3596,7 @@ rib_delete_ipv6 (int type, int flags, struct prefix_ipv6 *p,
 	}
       else
 	{
-	  if (IS_ZEBRA_DEBUG_KERNEL)
+//	  if (IS_ZEBRA_DEBUG_KERNEL)
 	    {
 	      if (gate)
 		zlog_debug ("route %s/%d via %s ifindex %d type %d doesn't exist in rib",
@@ -3760,6 +3765,7 @@ static_uninstall_ipv6 (struct prefix *p, struct static_ipv6 *si)
   struct route_node *rn;
   struct rib *rib;
   struct nexthop *nexthop;
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP6, SAFI_UNICAST, 0);
@@ -3998,6 +4004,7 @@ rib_weed_table (struct route_table *table)
   struct route_node *rn;
   struct rib *rib;
   struct rib *next;
+  rnode_debug (NULL, "Enter");
 
   if (table)
     for (rn = route_top (table); rn; rn = route_next (rn))
@@ -4028,6 +4035,7 @@ rib_sweep_table (struct route_table *table)
   struct rib *rib;
   struct rib *next;
   int ret = 0;
+  rnode_debug (NULL, "Enter");
 
   if (table)
     for (rn = route_top (table); rn; rn = route_next (rn))
@@ -4067,6 +4075,7 @@ rib_score_proto_table (u_char proto, struct route_table *table)
   struct rib *rib;
   struct rib *next;
   unsigned long n = 0;
+  rnode_debug (NULL, "Enter");
 
   if (table)
     for (rn = route_top (table); rn; rn = route_next (rn))
@@ -4255,6 +4264,7 @@ rib_add_ipv6_multipath (struct prefix_ipv6 *p, struct rib *rib, safi_t safi)
   struct route_node *rn;
   struct rib *same;
   struct nexthop *nexthop;
+  rnode_debug (NULL, "Enter");
 
   /* Lookup table.  */
   table = vrf_table (AFI_IP6, safi, 0);
@@ -4298,7 +4308,7 @@ rib_add_ipv6_multipath (struct prefix_ipv6 *p, struct rib *rib, safi_t safi)
   /* Link new rib to node.*/
   VLOG_DBG("%s:Adding the route node",__func__);
   rib_addnode (rn, rib);
-  if (IS_ZEBRA_DEBUG_RIB)
+//  if (IS_ZEBRA_DEBUG_RIB)
     {
       zlog_debug ("%s: called rib_addnode (%p, %p) on new RIB entry",
                   __func__, rn, rib);
@@ -4308,7 +4318,7 @@ rib_add_ipv6_multipath (struct prefix_ipv6 *p, struct rib *rib, safi_t safi)
   /* Free implicit route.*/
   if (same)
     {
-      if (IS_ZEBRA_DEBUG_RIB)
+//      if (IS_ZEBRA_DEBUG_RIB)
         {
           zlog_debug ("%s: calling rib_delnode (%p, %p) on existing RIB entry",
                       __func__, rn, same);
