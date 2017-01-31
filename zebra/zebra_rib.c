@@ -1858,6 +1858,7 @@ rib_process (struct route_node *rn)
   struct nexthop *nexthop = NULL, *tnexthop;
   int recursing;
   rib_table_info_t *info;
+  rnode_debug(rn, "Enter");
 
   COVERAGE_INC(zebra_rib_cnt);
   assert (rn);
@@ -2154,6 +2155,7 @@ process_subq (struct list * subq, u_char qindex)
 {
   struct listnode *lnode  = listhead (subq);
   struct route_node *rnode;
+  rnode_debug(rnode,"Enter");
 
   if (!lnode)
     return 0;
@@ -2186,6 +2188,7 @@ meta_queue_process (struct work_queue *dummy, void *data)
 {
   struct meta_queue * mq = data;
   unsigned i;
+  rnode_debug(NULL,"Enter");
 
 #ifdef ENABLE_OVSDB
   /*
@@ -2367,6 +2370,8 @@ meta_queue_new (void)
 static void
 rib_queue_init (struct zebra_t *zebra)
 {
+  rnode_debug(NULL,"Enter");
+
   assert (zebra);
 
   if (! (zebra->ribq = work_queue_new (zebra->master,
