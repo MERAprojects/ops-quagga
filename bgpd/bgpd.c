@@ -901,14 +901,14 @@ peer_create (union sockunion *su, struct bgp *bgp, as_t local_as,
   if (afi && safi)
     peer->afc[afi][safi] = 1;
 
-//#ifdef ENABLE_OVSDB
-//  /* Set afi for all address family and sub-address family  */
-//  for (afi = AFI_IP; afi < AFI_MAX; afi++)
-//    for (safi = SAFI_UNICAST; safi < SAFI_MULTICAST; safi++)
-//      {
-//        peer->afc[afi][safi] = 1;
-//      }
-//#endif /* ENABLE_OVSDB */
+#ifdef ENABLE_OVSDB
+  /* Set afi for all address family and sub-address family  */
+  for (afi = AFI_IP; afi < AFI_MAX; afi++)
+    for (safi = SAFI_UNICAST; safi < SAFI_MULTICAST; safi++)
+      {
+        peer->afc[afi][safi] = 1;
+      }
+#endif /* ENABLE_OVSDB */
 
   /* Last read and reset time set */
   peer->readtime = peer->resettime = bgp_clock ();

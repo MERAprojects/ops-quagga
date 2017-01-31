@@ -1717,11 +1717,11 @@ static bool compare_route_node_with_shadow_route_node (struct route_node* rn,
       return(false);
     }
 
-//  if (!zebra_cleanup_kernel_after_restart)
-//    {
-//      VLOG_DBG("zebra already completed restart");
-//      return(false);
-//    }
+  if (!zebra_cleanup_kernel_after_restart)
+    {
+      VLOG_DBG("zebra already completed restart");
+      return(false);
+    }
 
   p = rn->p;
 
@@ -1879,8 +1879,7 @@ rib_process (struct route_node *rn)
        */
       if (CHECK_FLAG (rib->status, RIB_ENTRY_REMOVED))
         {
-          if (IS_ZEBRA_DEBUG_RIB)
-            rnode_debug (rn, "rib->status, RIB_ENTRY_REMOVED rn %p, rib %p", rn, rib);
+          rnode_debug (rn, "rib->status, RIB_ENTRY_REMOVED rn %p, rib %p", rn, rib);
 
           if (rib != fib)
             {
@@ -2003,7 +2002,7 @@ rib_process (struct route_node *rn)
                * Check if for this route and its rib entry, kernel leanred
                * rib entry needs to be cleaned up.
                */
-/*              if (!compare_route_node_with_shadow_route_node(rn, select)) */
+              if (!compare_route_node_with_shadow_route_node(rn, select))
                 rib_install_kernel (rn, select);
 
               zebra_update_selected_route_nexthops_to_db(rn, select,
@@ -2092,7 +2091,7 @@ rib_process (struct route_node *rn)
       if (! RIB_SYSTEM_ROUTE (select))
         {
 #ifdef ENABLE_OVSDB
-/*          if (!compare_route_node_with_shadow_route_node(rn, select)) */
+          if (!compare_route_node_with_shadow_route_node(rn, select))
             rib_install_kernel (rn, select);
 
           zebra_update_selected_route_nexthops_to_db(rn, select,
