@@ -1878,6 +1878,9 @@ rib_process (struct route_node *rn)
        */
       if (CHECK_FLAG (rib->status, RIB_ENTRY_REMOVED))
         {
+          if (IS_ZEBRA_DEBUG_RIB)
+            rnode_debug (rn, "rib->status, RIB_ENTRY_REMOVED rn %p, rib %p", rn, rib);
+
           if (rib != fib)
             {
               if (IS_ZEBRA_DEBUG_RIB)
@@ -1893,16 +1896,23 @@ rib_process (struct route_node *rn)
 
       /* Skip unreachable nexthop. */
       if (! nexthop_active_update (rn, rib, 0))
+      {
+        rnode_debug (rn, "Skip unreachable nexthop nexthop_active_update rn %p, rib %p", rn, rib);
         continue;
+      }
 
       /* Infinit distance. */
       if (rib->distance == DISTANCE_INFINITY)
+      {
+        rnode_debug (rn, "Infinit distance rib->distance == DISTANCE_INFINITY rn %p, rib %p", rn, rib);
         continue;
+      }
 
       /* Newly selected rib, the common case. */
       if (!select)
         {
           select = rib;
+          rnode_debug (rn, "Newly selected rib, the common case. !select rn %p, rib %p", rn, rib);
           continue;
         }
 
@@ -1921,18 +1931,26 @@ rib_process (struct route_node *rn)
           if (select->type != ZEBRA_ROUTE_CONNECT
               || rib->metric <= select->metric)
             select = rib;
+          rnode_debug (rn, "rib->type == ZEBRA_ROUTE_CONNECT rn %p, rib %p", rn, rib);
           continue;
         }
       else if (select->type == ZEBRA_ROUTE_CONNECT)
+      {
+        rnode_debug (rn, "select->type == ZEBRA_ROUTE_CONNECT rn %p, select %p", rn, select);
         continue;
+      }
 
       /* higher distance loses */
       if (rib->distance > select->distance)
+      {
+        rnode_debug (rn, "higher distance loses rib->distance > select->distance rib %p %u, select %p %u", rib, rib->distance, select, select->distance);
         continue;
+      }
 
       /* lower wins */
       if (rib->distance < select->distance)
         {
+          rnode_debug (rn, "lower wins rib->distance < select->distance rib %p %u, select %p %u", rib, rib->distance, select, select->distance);
           select = rib;
           continue;
         }
