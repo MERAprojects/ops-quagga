@@ -189,7 +189,7 @@ txn_command_result(enum ovsdb_idl_txn_status status, char *msg, char *pr)
 #define END_DB_TXN(txn, msg, pr)                          \
     do {                                                  \
         enum ovsdb_idl_txn_status status;                 \
-        status = ovsdb_idl_txn_commit(txn);               \
+        status = ovsdb_idl_txn_commit_block(txn);               \
         return txn_command_result(status, msg, pr);       \
     } while (0)
 
