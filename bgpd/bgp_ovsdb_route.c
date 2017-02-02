@@ -1313,7 +1313,7 @@ bgp_txn_complete_processing(void)
 
     HMAP_FOR_EACH (txn, hmap_node, &bgp_ovsdb_txn_hmap) {
         /* Get commit status for transaction */
-        status = ovsdb_idl_txn_commit(txn->txn);
+        status = ovsdb_idl_txn_commit_block(txn->txn);
         prefix2str(&txn->prefix, prefix_str, sizeof(prefix_str));
 
         /* log transaction */

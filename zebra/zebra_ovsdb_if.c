@@ -6714,7 +6714,7 @@ zebra_finish_txn (bool if_last_batch)
     {
       if (zebra_txn)
         {
-          status =  ovsdb_idl_txn_commit(zebra_txn);
+          status =  ovsdb_idl_txn_commit_block(zebra_txn);
 
           VLOG_DBG("The transaction error code is %s for committing "
                    "route batch %d",
