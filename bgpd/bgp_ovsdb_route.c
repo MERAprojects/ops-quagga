@@ -392,6 +392,7 @@ static const struct ovsrec_nexthop*
 bgp_ovsdb_lookup_nexthop(char *ip)
 {
     const struct ovsrec_nexthop *row = NULL;
+    VLOG_DBG("bgp_ovsdb_lookup_nexthop ENTER\n");
     if (!ip)
         assert(0);
 
@@ -413,6 +414,7 @@ static const struct ovsrec_bgp_nexthop*
 bgp_ovsdb_lookup_local_nexthop(char *ip)
 {
     const struct ovsrec_bgp_nexthop *row = NULL;
+    VLOG_DBG("bgp_ovsdb_lookup_local_nexthop ENTER\n");
     if (!ip)
         assert(0);
 
@@ -478,6 +480,7 @@ bgp_ovsdb_set_rib_nexthop(struct ovsdb_idl_txn *txn,
     }
     nexthop_list = xmalloc(sizeof *rib->nexthops * nexthop_num);
     /* Set first nexthop */
+    VLOG_DBG("First call bgp_ovsdb_lookup_nexthop\n");
     pnexthop = bgp_ovsdb_lookup_nexthop(nexthop_buf);
     if (!pnexthop) {
         pnexthop = ovsrec_nexthop_insert(txn);
@@ -518,6 +521,7 @@ bgp_ovsdb_set_rib_nexthop(struct ovsdb_idl_txn *txn,
                    }
                 inet_ntop(p->family, nexthop6, nexthop_buf, sizeof(nexthop_buf));
             }
+            VLOG_DBG("Second call bgp_ovsdb_lookup_nexthop\n");
             pnexthop = bgp_ovsdb_lookup_nexthop(nexthop_buf);
             if (!pnexthop) {
                 pnexthop = ovsrec_nexthop_insert(txn);
@@ -592,6 +596,7 @@ bgp_ovsdb_set_local_rib_nexthop(struct ovsdb_idl_txn *txn,
     nexthop_list = xmalloc(sizeof *rib->bgp_nexthops * nexthop_num);
 
     /* Set first nexthop */
+    VLOG_DBG("First call bgp_ovsdb_lookup_local_nexthop\n");
     pnexthop = bgp_ovsdb_lookup_local_nexthop(nexthop_buf);
     if (!pnexthop) {
         pnexthop = ovsrec_bgp_nexthop_insert(txn);
@@ -627,6 +632,7 @@ bgp_ovsdb_set_local_rib_nexthop(struct ovsdb_idl_txn *txn,
                 }
                 inet_ntop(p->family, nexthop6, nexthop_buf, sizeof(nexthop_buf));
             }
+            VLOG_DBG("Second call bgp_ovsdb_lookup_local_nexthop\n");
             pnexthop = bgp_ovsdb_lookup_local_nexthop(nexthop_buf);
             if (!pnexthop) {
                 pnexthop = ovsrec_bgp_nexthop_insert(txn);
