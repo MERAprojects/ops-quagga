@@ -2127,7 +2127,7 @@ bgp_daemon_ovsdb_neighbor_statistics_update (bool start_new_db_txn,
     keywords, values, count);
 
     if (start_new_db_txn) {
-        status = ovsdb_idl_txn_commit(db_txn);
+        status = ovsdb_idl_txn_commit_block(db_txn);
         ovsdb_idl_txn_destroy(db_txn);
         VLOG_DBG("%s OVSDB Neighbour statistics update transaction status is %s",
                 __FUNCTION__, ovsdb_idl_txn_status_to_string(status));
@@ -2207,7 +2207,7 @@ void bgp_daemon_ovsdb_neighbor_update (struct peer *peer,
     ovsrec_bgp_neighbor_set_negotiated_timers(ovs_bgp_neighbor_ptr,
         key_timers, value_timers, 2);
 
-    status = ovsdb_idl_txn_commit(db_txn);
+    status = ovsdb_idl_txn_commit_block(db_txn);
     VLOG_DBG("%s OVSDB Neighbour update status is %s", __FUNCTION__,
                     ovsdb_idl_txn_status_to_string(status));
     ovsdb_idl_txn_destroy(db_txn);
@@ -3242,7 +3242,7 @@ bgp_create_bfd_session_in_ovsdb(char *remote, char *local, as_t asn)
       }
     }
 
-    status = ovsdb_idl_txn_commit(ovs_txn);
+    status = ovsdb_idl_txn_commit_block(ovs_txn);
     VLOG_DBG("BGP-BFD: create BFD Session for remote=%s local=%s : commit status %s",
              remote, local, ovsdb_idl_txn_status_to_string(status));
     ovsdb_idl_txn_destroy(ovs_txn);
@@ -3277,7 +3277,7 @@ bgp_delete_bfd_session_in_ovsdb(char *remote, as_t asn)
         ovsrec_bfd_session_delete(ovs_bfd_session);
     }
 
-    status = ovsdb_idl_txn_commit(ovs_txn);
+    status = ovsdb_idl_txn_commit_block(ovs_txn);
     VLOG_DBG("BGP-BFD: Delete BFD Session for remote=%s: commit status %s",
             remote, ovsdb_idl_txn_status_to_string(status));
     ovsdb_idl_txn_destroy(ovs_txn);
