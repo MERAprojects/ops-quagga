@@ -79,6 +79,7 @@ struct zebra_route_key
   int64_t prefix_len;
   struct ipv4v6_addr nexthop;
   char ifname[IF_NAMESIZE+1];
+  char flag[10];               //flag indicates "blackhole" or "reject" nexthop
   /* OPS_TODO: add vrf support */
 };
 

@@ -292,7 +292,8 @@ ip6_routing_address_is_invalid (char * ipv6addr, bool is_nexthop)
 struct ovsrec_nexthop *
 set_nexthop_entry (struct ovsdb_idl_txn *status_txn, char * nh_entry,
                    bool prefix_match, bool static_match, char * dist_entry,
-                   const struct ovsrec_route * row, char * ip_addr_family)
+                   const struct ovsrec_route * row, char * ip_addr_family,
+                   char * nexthop_flag)
 {
   struct ovsrec_nexthop *row_nh = NULL;
   const struct ovsrec_port *row_port = NULL;
@@ -302,21 +303,53 @@ set_nexthop_entry (struct ovsdb_idl_txn *status_txn, char * nh_entry,
   int ret = 0;
   int64_t distance;
   bool ip_found;
+  bool flag_match = false;
   bool ip_addr_family_is_ipv4 = false;
   bool ip_addr_family_is_ipv6 = false;
 
   row_nh = ovsrec_nexthop_insert (status_txn);
 
+  if (!dist_entry)
+  {
+    distance = DEFAULT_DISTANCE;
+  }
+  else
+  {
+    distance = atoi(dist_entry);
+  }
+
+  /* Null0 static route.  */
+  if (((nh_entry != NULL) && (strncasecmp (nh_entry, "Null0",
+        strlen (nh_entry)) == 0)))
+  {
+      flag_match = true;
+      ovsrec_nexthop_set_flag (row_nh, OVSREC_NEXTHOP_FLAG_BLACKHOLE);
+  }
+  else if (nexthop_flag) //RL: what are those cases when it will be called?
+  {
+    flag_match = true;
+    ovsrec_nexthop_set_flag (row_nh, nexthop_flag);
+  }
+
   if (!strcmp ("ipv4", ip_addr_family))
+  {
+    if (flag_match)
     {
-      ret = inet_pton (AF_INET, nh_entry, &nexthop);
-      ip_addr_family_is_ipv4 = true;
+        ovsrec_route_set_distance (row, &distance, 1);
+        ovsrec_nexthop_set_ip_address (row_nh, "");
+        return row_nh;
     }
+    else
+    {
+        ret = inet_pton (AF_INET, nh_entry, &nexthop);
+        ip_addr_family_is_ipv4 = true;
+    }
+  }
   else if (!strcmp ("ipv6", ip_addr_family))
-    {
-      ret = inet_pton (AF_INET6, nh_entry, &nexthop_ipv6);
-      ip_addr_family_is_ipv6 = true;
-    }
+  {
+    ret = inet_pton (AF_INET6, nh_entry, &nexthop_ipv6);
+    ip_addr_family_is_ipv6 = true;
+  }
 
   /* Validating and assigning nexthop as an interface */
   if (!ret)
@@ -374,19 +407,10 @@ set_nexthop_entry (struct ovsdb_idl_txn *status_txn, char * nh_entry,
 
   if (!prefix_match)
     {
-      if (dist_entry == NULL)
-        {
-          /*
-           * Hardcode the n_distance param to 1 for static routes
-           */
-          distance = DEFAULT_DISTANCE;
-          ovsrec_route_set_distance (row, &distance, 1);
-        }
-      else
-        {
-          distance = atoi (dist_entry);
-          ovsrec_route_set_distance (row, &distance, 1);
-        }
+        /*
+        * Hardcode the n_distance param to 1 for static routes
+        */
+        ovsrec_route_set_distance (row, &distance, 1);
     }
   else
     {
@@ -436,9 +460,9 @@ set_nexthop_entry (struct ovsdb_idl_txn *status_txn, char * nh_entry,
 
 static int
 #ifdef VRF_ENABLE
-ip_route_common (struct vty *vty, char **argv, char *distance, char *vrf)
+ip_route_common (struct vty *vty, char **argv, char *distance, char *flag, char *vrf)
 #else
-ip_route_common (struct vty *vty, char **argv, char *distance)
+ip_route_common (struct vty *vty, char **argv, char *distance, char *flag)
 #endif
 {
   const struct ovsrec_route *row = NULL;
@@ -452,6 +476,7 @@ ip_route_common (struct vty *vty, char **argv, char *distance)
   char prefix_str[MAX_ADDRESS_LEN];
   char prefix_str_copy[MAX_ADDRESS_LEN];
   char *prefix = NULL;
+  char *nexthop_flag = NULL;
   bool prefix_match = false;
   bool nh_match = false;
   bool static_match = false;
@@ -503,6 +528,23 @@ ip_route_common (struct vty *vty, char **argv, char *distance)
       cli_do_config_abort (status_txn);
       return CMD_OVSDB_FAILURE;
     }
+
+  if (flag)
+  {
+    switch(flag[0])
+    {
+        case 'r':
+        case 'R':
+            nexthop_flag = OVSREC_NEXTHOP_FLAG_REJECT;
+            break;
+        case 'b':
+        case 'B':
+            nexthop_flag = OVSREC_NEXTHOP_FLAG_BLACKHOLE;
+            break;
+        default:
+            vty_out (vty, "\nMalformed flag %s\n", flag);
+    }
+  }
 
   OVSREC_ROUTE_FOR_EACH (row, idl)
     {
@@ -574,7 +616,7 @@ ip_route_common (struct vty *vty, char **argv, char *distance)
       ovsrec_route_set_from (row, OVSREC_ROUTE_FROM_STATIC);
 
       row_nh = set_nexthop_entry (status_txn, argv[1], prefix_match,
-                                  static_match, distance, row, "ipv4");
+                                  static_match, distance, row, "ipv4", nexthop_flag);
       if (row_nh == NULL)
         {
           cli_do_config_abort (status_txn);
@@ -611,8 +653,9 @@ ip_route_common (struct vty *vty, char **argv, char *distance)
 
       if (!nh_match)
         {
-          row_nh = set_nexthop_entry (status_txn, argv[1], prefix_match,
-                                      static_match, distance, row, "ipv4");
+          row_nh = set_nexthop_entry (status_txn,
+                  !nexthop_flag ? (char*) argv[1] : NULL, prefix_match,
+                  static_match, distance, row, "ipv4", nexthop_flag);
           if (row_nh == NULL)
             {
               cli_do_config_abort (status_txn);
@@ -651,50 +694,88 @@ ip_route_common (struct vty *vty, char **argv, char *distance)
 
 DEFUN (vtysh_ip_route,
     vtysh_ip_route_cmd,
-    "ip route A.B.C.D/M (A.B.C.D|INTERFACE)",
-    IP_STR
-    "Configure static routes\n"
-    "IP destination prefix (e.g. 10.0.0.0/8)\n"
-    "Nexthop IP (eg. 10.0.0.1)\n"
-    "Outgoing interface\n")
-{
-#ifdef VRF_ENABLE
-  return ip_route_common(vty, (char **)argv, NULL, NULL);
-#else
-  return ip_route_common(vty, (char **)argv, NULL);
-#endif
-}
-
-DEFUN (vtysh_ip_route_distance,
-    vtysh_ip_route_distance_cmd,
-    "ip route A.B.C.D/M (A.B.C.D|INTERFACE) <1-255>",
+    "ip route A.B.C.D/M (A.B.C.D|INTERFACE|Null0)",
     IP_STR
     "Configure static routes\n"
     "IP destination prefix (e.g. 10.0.0.0/8)\n"
     "Nexthop IP (eg. 10.0.0.1)\n"
     "Outgoing interface\n"
+    "Silently discard pkts when matched\n")
+{
+#ifdef VRF_ENABLE
+  return ip_route_common(vty, (char **)argv, NULL, NULL, NULL);
+#else
+  return ip_route_common(vty, (char **)argv, NULL, NULL);
+#endif
+}
+
+DEFUN (vtysh_ip_route_flags,
+      vtysh_ip_route_flags_cmd,
+      "ip route A.B.C.D/M (reject|blackhole)",
+      IP_STR
+      "Configure static routes\n"
+      "IP destination prefix (e.g. 10.0.0.0/8)\n"
+      "Emit an ICMP unreachable when matched\n"
+      "Silently discard pkts when matched\n")
+{
+#ifdef VRF_ENABLE
+  return ip_route_common (vty, char( **)argv, NULL, (char *)argv[1], NULL);
+#else
+  return ip_route_common (vty, (char **)argv, NULL, (char *)argv[1]);
+#endif
+}
+
+DEFUN (vtysh_ip_route_flags_distance,
+      vtysh_ip_route_flags_distance_cmd,
+      "ip route A.B.C.D/M (reject|blackhole) <1-255>",
+      IP_STR
+      "Configure static routes\n"
+      "IP destination prefix (e.g. 10.0.0.0/8)\n"
+      "Emit an ICMP unreachable when matched\n"
+      "Silently discard pkts when matched\n"
+      "Distance (Default: 1)\n")
+{
+#ifdef VRF_ENABLE
+  return ip_route_common (vty, (char **)argv, (char *)argv[2],
+                          (char *)argv[1], NULL);
+#else
+  return ip_route_common (vty, (char **)argv, (char *)argv[2],
+                          (char *)argv[1]);
+#endif
+}
+
+DEFUN (vtysh_ip_route_distance,
+    vtysh_ip_route_distance_cmd,
+    "ip route A.B.C.D/M (A.B.C.D|INTERFACE|Null0) <1-255>",
+    IP_STR
+    "Configure static routes\n"
+    "IP destination prefix (e.g. 10.0.0.0/8)\n"
+    "Nexthop IP (eg. 10.0.0.1)\n"
+    "Outgoing interface\n"
+    "Silently discard pkts when matched\n"
     "Distance (Default: 1)\n")
 {
 #ifdef VRF_ENABLE
-  return ip_route_common(vty, (char **)argv, (char *)argv[2], NULL);
+  return ip_route_common(vty, (char **)argv, (char *)argv[2], NULL, NULL);
 #else
-  return ip_route_common(vty, (char **)argv, (char *)argv[2]);
+  return ip_route_common(vty, (char **)argv, (char *)argv[2], NULL);
 #endif
 }
 
 #ifdef VRF_ENABLE
 DEFUN (vtysh_ip_route_vrf,
     vtysh_ip_route_vrf_cmd,
-    "ip route A.B.C.D/M (A.B.C.D|INTERFACE) vrf WORD",
+    "ip route A.B.C.D/M (A.B.C.D|INTERFACE|Null0) vrf WORD",
     IP_STR
     "Configure static routes\n"
     "IP destination prefix (e.g. 10.0.0.0/8)\n"
     "Nexthop IP (eg. 10.0.0.1)\n"
     "Outgoing interface\n"
+    "Silently discard pkts when matched\n"
     "VRF Information\n"
     "VRF name\n")
 {
-  return ip_route_common(vty, (char **)argv, NULL, (char *)argv[2]);
+  return ip_route_common(vty, (char **)argv, NULL, NULL, (char *)argv[2]);
 }
 #endif
 
@@ -783,19 +864,23 @@ show_routes (struct vty *vty, char * ip_addr_family)
                   if (row_route->nexthops[i]->selected == NULL ||
                       row_route->nexthops[i]->selected[0] == true)
                     {
-                      if (row_route->nexthops[i]->ip_address)
+                      if (row_route->nexthops[i]->flag)
+                      {
+                        snprintf(str, sizeof(str), " %s",
+                                row_route->nexthops[i]->flag);
+                      }
+                      else if (row_route->nexthops[i]->ip_address)
                         {
                           snprintf (str, sizeof(str), " %s",
                                     row_route->nexthops[i]->ip_address);
-                          vty_out (vty, "\tvia %s", str);
                         }
                       else if (row_route->nexthops[i]->ports != NULL
                                && row_route->nexthops[i]->ports[0]->name)
                         {
                           snprintf (str, sizeof(str), " %s",
                                     row_route->nexthops[i]->ports[0]->name);
-                          vty_out (vty, "\tvia %s", str);
                         }
+                      vty_out (vty, "\tvia %s", str);
 
                       vty_out (vty, ",  [%ld", *row_route->distance);
 
@@ -862,19 +947,21 @@ DEFUN (vtysh_show_ip_route,
 
 static int
 #ifdef VRF_ENABLE
-no_ip_route_common (struct vty *vty, char **argv, char *distance, char *vrf)
+no_ip_route_common (struct vty *vty, char **argv, char *distance, char *flag, char *vrf)
 #else
-no_ip_route_common (struct vty *vty, char **argv, char *distance)
+no_ip_route_common (struct vty *vty, char **argv, char *distance, char *flag)
 #endif
 {
   int ret;
   const struct ovsrec_route *row_route = NULL;
-  int flag = 0;
   struct prefix p;
   char prefix_str[MAX_ADDRESS_LEN];
   int found_flag = 0;
   char str[17];
-  int distance_match = 0;
+  char *nexthop_flag = NULL;
+  bool distance_match = false;
+  bool no_route_flag = false;
+  bool flag_match = true;
   int i, n;
 #ifdef VRF_ENABLE
   char *vrf_name = NULL;
@@ -914,6 +1001,27 @@ no_ip_route_common (struct vty *vty, char **argv, char *distance)
       return CMD_OVSDB_FAILURE;
     }
 
+  if (flag)
+  {
+    switch(flag[0])
+    {
+      case 'r':
+      case 'R':
+        nexthop_flag = OVSREC_NEXTHOP_FLAG_REJECT;
+        break;
+      case 'b':
+      case 'B':
+        nexthop_flag = OVSREC_NEXTHOP_FLAG_BLACKHOLE;
+        break;
+      default:
+        vty_out (vty, "\nMalformed flag %s\n", flag);
+    }
+  }
+  else if (strncasecmp (argv[1], "Null0", strlen (argv[1])) == 0)
+  {
+    nexthop_flag = OVSREC_NEXTHOP_FLAG_BLACKHOLE;
+  }
+
 #ifdef VRF_ENABLE
   if (!vrf)
     vrf_name = DEFAULT_VRF_NAME;
@@ -934,34 +1042,34 @@ no_ip_route_common (struct vty *vty, char **argv, char *distance)
 #endif
 
       if (row_route->address_family != NULL)
-        {
-          if (strcmp (row_route->address_family, "ipv4"))
+      {
+        if (strcmp (row_route->address_family, "ipv4"))
             continue;
-        }
+      }
 
       if (row_route->from != NULL)
-        {
-          if (strcmp (row_route->from, OVSREC_ROUTE_FROM_STATIC))
+      {
+        if (strcmp (row_route->from, OVSREC_ROUTE_FROM_STATIC))
             continue;
-        }
+      }
 
       if (row_route->prefix != NULL)
-        {
+      {
           /* Checking for presence of Prefix and Nexthop entries in a row */
           if (0 == strcmp (prefix_str, row_route->prefix))
-            {
+          {
               if (row_route->n_nexthops)
-                {
+              {
                   memset (str, 0, sizeof(str));
-                  distance_match = 0;
+                  distance_match = false;
 
                   if (distance != NULL)
-                    {
+                  {
                       (atoi (distance) == *row_route->distance) ?
-                          (distance_match = 1) : (distance_match = 0);
-                    }
+                          (distance_match = true) : (distance_match = false);
+                  }
                   else
-                    distance_match = 1;
+                    distance_match = true;
 
                   /* Checking for presence of Nexthop IP or Interface*/
                   struct ovsrec_nexthop **nexthops = NULL;
@@ -969,57 +1077,96 @@ no_ip_route_common (struct vty *vty, char **argv, char *distance)
                       sizeof *row_route->nexthops
                           * (row_route->n_nexthops - 1));
 
-                  for (i = n = 0; i < row_route->n_nexthops; i++)
+                  if (nexthop_flag)
+                  {
+                    for (i = n = 0; i < row_route->n_nexthops; i++)
+                    {
+                      if ((nexthop_flag && row_route->nexthops[i]->flag) &&
+                          strcmp (nexthop_flag, row_route->nexthops[i]->flag))
+                      {
+                        flag_match = false;
+                      }
+                      if (row_route->nexthops[i] &&
+                          row_route->nexthops[i]->ip_address != NULL)
+                      {
+                        if(distance_match && flag_match)
+                        {
+                          found_flag = true;
+                          ovsrec_nexthop_delete (row_route->nexthops[i]);
+                          if(row_route->n_nexthops == 1)
+                          {
+                            ovsrec_route_delete (row_route);
+                          }
+                        }
+                        else
+                        {
+                          nexthops[n++] = row_route->nexthops[i];
+                        }
+                      }
+                    }
+                    if (row_route->n_nexthops != 1 && found_flag)
+                    {
+                      ovsrec_route_set_nexthops (row_route, nexthops,
+                                                 row_route->n_nexthops - 1);
+                      free(nexthops);
+                    }
+                  }
+                  else
+                  {
+                    for (i = n = 0; i < row_route->n_nexthops; i++)
                     {
                       if ((row_route->nexthops[i]->ip_address) ||
                           (row_route->nexthops[i]->ports != NULL &&
                            row_route->nexthops[i]->ports[0]->name))
-                        {
+                      {
                           if (row_route->nexthops[i]->ip_address != NULL)
-                            {
+                          {
+                              if (row_route->nexthops[i]->flag)
+                              {
+                                flag_match = false;
+                              }
                               if (0 == strcmp (argv[1],
                                                row_route->nexthops[i]->ip_address)
-                                               && (distance_match == 1))
-                                {
-                                  found_flag = 1;
-                                  ovsrec_nexthop_delete (
-                                      row_route->nexthops[i]);
+                                               && distance_match && flag_match)
+                              {
+                                  found_flag = true;
+                                  ovsrec_nexthop_delete (row_route->nexthops[i]);
                                   if (row_route->n_nexthops == 1)
                                     ovsrec_route_delete (row_route);
-                                }
+                              }
                               else
                                 nexthops[n++] = row_route->nexthops[i];
-                            }
+                          }
                           else if (row_route->nexthops[i]->ports != NULL &&
                                    row_route->nexthops[i]->ports[0]->name
                                    != NULL)
-                            {
+                          {
                               if (0 == strcmp (argv[1],
                                                row_route->nexthops[i]->ports[0]->name)
-                                               && (distance_match == 1))
-                                {
-                                  found_flag = 1;
-                                  ovsrec_nexthop_delete (
-                                      row_route->nexthops[i]);
+                                               && distance_match && flag_match)
+                              {
+                                  found_flag = true;
+                                  ovsrec_nexthop_delete (row_route->nexthops[i]);
                                   if (row_route->n_nexthops == 1)
                                     ovsrec_route_delete (row_route);
-                                }
+                              }
                               else
                                 nexthops[n++] = row_route->nexthops[i];
-                            }
+                           }
                         }
                     }
-                  if (row_route->n_nexthops != 1 && found_flag == 1)
+                  if (row_route->n_nexthops != 1 && found_flag)
                     ovsrec_route_set_nexthops (row_route, nexthops,
                                                row_route->n_nexthops - 1);
                   free (nexthops);
                 }
             }
         }
-      flag = 1;
+      }
+      no_route_flag = true;
     }
 
-  if (flag == 0)
+  if (!no_route_flag)
     vty_out (vty, "\nNo ip routes configured %s\n", VTY_NEWLINE);
 
   if (found_flag == 0)
@@ -1048,9 +1195,44 @@ DEFUN (vtysh_no_ip_route,
     "Outgoing interface\n")
 {
 #ifdef VRF_ENABLE
-  return no_ip_route_common(vty, (char **)argv, NULL, NULL);
+  return no_ip_route_common(vty, (char **)argv, NULL, NULL, NULL);
 #else
-  return no_ip_route_common(vty, (char **)argv, NULL);
+  return no_ip_route_common(vty, (char **)argv, NULL, NULL);
+#endif
+}
+
+DEFUN (vtysh_no_ip_route_flags,
+    vtysh_no_ip_route_flags_cmd,
+    "no ip route A.B.C.D/M (reject|blackhole)",
+    NO_STR
+    IP_STR
+    "Configure static routes\n"
+    "IP destination prefix (e.g. 10.0.0.0/8)\n"
+    "Emit an ICMP unreachable when matched\n"
+    "Silently discard pkts when matched\n")
+{
+#ifdef VRF_ENABLE
+  return no_ip_route_common(vty, (char **)argv, NULL, (char *)argv[1], NULL);
+#else
+  return no_ip_route_common(vty, (char **)argv, NULL, (char *)argv[1]);
+#endif
+}
+
+DEFUN (vtysh_no_ip_route_flags_distance,
+      vtysh_no_ip_route_flags_distance_cmd,
+      "no ip route A.B.C.D/M (reject|blackhole) <1-255>",
+      NO_STR
+      IP_STR
+      "Configure static route \n"
+      "IP destination prefix (e.g. 10.0.0.0/8)\n"
+      "Emit an ICMP unreachable when matched\n"
+      "Silently discard pkts when matched\n"
+      "Distance (Default: 1)\n")
+{
+#ifdef VRF_ENABLE
+  return no_ip_route_common(vty, (char **)argv, (char *)argv[2], (char *)argv[1], NULL);
+#else
+  return no_ip_route_common(vty, (char **)argv, (char *)argv[2], (char *)argv[1]);
 #endif
 }
 
@@ -1060,15 +1242,15 @@ DEFUN (vtysh_no_ip_route_distance,
     NO_STR
     IP_STR
     "Configure static route\n"
-    "IP destination prefix (e.g. 10.0.0.0)\n"
+    "IP destination prefix (e.g. 10.0.0.0/8)\n"
     "Nexthop IP (eg. 10.0.0.1)\n"
     "Outgoing interface\n"
     "Distance (Default: 1)\n")
 {
 #ifdef VRF_ENABLE
-  return no_ip_route_common(vty, (char **)argv, (char *)argv[2], NULL);
+  return no_ip_route_common(vty, (char **)argv, (char *)argv[2], NULL, NULL);
 #else
-  return no_ip_route_common(vty, (char **)argv, (char *)argv[2]);
+  return no_ip_route_common(vty, (char **)argv, (char *)argv[2], NULL);
 #endif
 }
 
@@ -1085,14 +1267,14 @@ DEFUN (vtysh_no_ip_route_vrf,
     "VRF Information\n"
     "VRF name\n")
 {
-  return no_ip_route_common(vty, (char **)argv, NULL, (char *)argv[2]);
+  return no_ip_route_common(vty, (char **)argv, NULL, NULL, (char *)argv[2]);
 }
 #endif
 
 /* IPv6 CLIs*/
 
 static int
-ipv6_route_common (struct vty *vty, char **argv, char *distance)
+ipv6_route_common (struct vty *vty, char **argv, char *distance, char *flag)
 {
   const struct ovsrec_route *row = NULL;
   const struct ovsrec_nexthop *row_nh = NULL;
@@ -1103,6 +1285,7 @@ ipv6_route_common (struct vty *vty, char **argv, char *distance)
   enum ovsdb_idl_txn_status status;
   struct ovsdb_idl_txn *status_txn = NULL;
   char prefix_str[MAX_ADDRESS_LEN];
+  char *nexthop_flag = NULL;
   bool prefix_match = false;
   bool nh_match = false;
   bool static_match = false;
@@ -1136,6 +1319,23 @@ ipv6_route_common (struct vty *vty, char **argv, char *distance)
       cli_do_config_abort (status_txn);
       return CMD_OVSDB_FAILURE;
     }
+
+  if(flag)
+  {
+    switch(flag[0])
+    {
+        case 'r':
+        case 'R':
+          nexthop_flag = OVSREC_NEXTHOP_FLAG_REJECT;
+          break;
+        case 'b':
+        case 'B':
+          nexthop_flag = OVSREC_NEXTHOP_FLAG_BLACKHOLE;
+          break;
+        default:
+          vty_out (vty, "\nMalformed flag %s\n", flag);
+    }
+  }
 
   /* Validate if the prefix entered is a standard multicast,
    * linklocal or loopback address */
@@ -1193,7 +1393,8 @@ ipv6_route_common (struct vty *vty, char **argv, char *distance)
       ovsrec_route_set_from (row, OVSREC_ROUTE_FROM_STATIC);
 
       row_nh = set_nexthop_entry (status_txn, (char*) argv[1], prefix_match,
-                                  static_match, distance, row, "ipv6");
+                                  static_match, distance, row, "ipv6",
+                                  nexthop_flag);
       if (row_nh == NULL)
         {
           cli_do_config_abort (status_txn);
@@ -1232,7 +1433,8 @@ ipv6_route_common (struct vty *vty, char **argv, char *distance)
       if (!nh_match)
         {
           row_nh = set_nexthop_entry (status_txn, (char*) argv[1], prefix_match,
-                                      static_match, distance, row, "ipv6");
+                                      static_match, distance, row, "ipv6",
+                                      nexthop_flag);
 
           if (row_nh == NULL)
             {
@@ -1278,7 +1480,21 @@ DEFUN (vtysh_ipv6_route,
     "Nexthop IPv6 (eg. 2010:bda::)\n"
     "Outgoing interface\n")
 {
-  return ipv6_route_common(vty, (char **)argv, NULL);
+  return ipv6_route_common(vty, (char **)argv, NULL, NULL);
+}
+
+DEFUN (vtysh_ipv6_route_flags,
+      vtysh_ipv6_route_flags_cmd,
+      "ipv6 route X:X::X:X/M  (X:X::X:X|INTERFACE) (reject|blackhole)",
+      IPV6_STR
+      "Configure static routes\n"
+      "IPv6 destination prefix (e.g. 2010:bd9::/32)\n"
+      "Nexthop IPv6 (eg. 2010:bda::)\n"
+      "Outgoing interface\n"
+      "Emit an ICMP unreachable when matched\n"
+      "Silently discard pkts when matched\n")
+{
+  return ipv6_route_common (vty, (char **)argv, NULL, (char *)argv[2]);
 }
 
 DEFUN (vtysh_ipv6_route_distance,
@@ -1291,7 +1507,23 @@ DEFUN (vtysh_ipv6_route_distance,
     "Outgoing interface\n"
     "Distance (Default: 1)\n")
 {
-  return ipv6_route_common(vty, (char **)argv, (char *)argv[2]);
+  return ipv6_route_common(vty, (char **)argv, (char *)argv[2], NULL);
+}
+
+DEFUN (vtysh_ipv6_route_flags_distance,
+    vtysh_ipv6_route_flags_distance_cmd,
+    "ipv6 route X:X::X:X/M (X:X::X:X|INTERFACE) (reject|blackhole) <1-255>",
+    IPV6_STR
+    "Configure static routes\n"
+    "IPv6 destination prefix (e.g. 2010:bd9::/32)\n"
+    "Nexthop IPv6 (eg. 2010:bda::)\n"
+    "Outgoing interface\n"
+    "Emit an ICMP unreachable when matched\n"
+    "Silently discard pkts when matched\n"
+    "Distance (Default: 1)\n")
+{
+  return ipv6_route_common (vty, (char **)argv, (char *)argv[3],
+                            (char *)argv[2]);
 }
 
 DEFUN (vtysh_show_ipv6_route,
@@ -1313,17 +1545,19 @@ DEFUN (vtysh_show_ipv6_route,
 }
 
 static int
-no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
+no_ipv6_route_common (struct vty *vty, char **argv, char *distance, char *flag)
 {
   int ret;
   const struct ovsrec_route *row_route = NULL;
-  int flag = 0;
   struct prefix p;
   char prefix_str[MAX_ADDRESS_LEN];
-  int found_flag = 0;
   char str[17];
-  int distance_match = 0;
+  char *nexthop_flag = NULL;
   int i, n;
+  bool distance_match = false;
+  bool found_flag = false;
+  bool route_flag = false;
+  bool flag_match = false;
 
   enum ovsdb_idl_txn_status status;
   struct ovsdb_idl_txn *status_txn = NULL;
@@ -1358,6 +1592,23 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
       return CMD_OVSDB_FAILURE;
     }
 
+  if (flag)
+  {
+    switch (flag[0])
+    {
+      case 'r':
+      case 'R':
+        nexthop_flag = OVSREC_NEXTHOP_FLAG_REJECT;
+        break;
+      case 'b':
+      case 'B':
+        nexthop_flag = OVSREC_NEXTHOP_FLAG_BLACKHOLE;
+        break;
+      default:
+        vty_out (vty, "\nMalformed flag %s\n", flag);
+    }
+  }
+
   OVSREC_ROUTE_FOR_EACH (row_route, idl)
     {
       if (row_route->address_family != NULL)
@@ -1380,15 +1631,15 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
               if (row_route->n_nexthops)
                 {
                   memset (str, 0, sizeof(str));
-                  distance_match = 0;
+                  distance_match = false;
 
                   if (distance != NULL)
                     {
                       (atoi (distance) == *row_route->distance) ?
-                          (distance_match = 1) : (distance_match = 0);
+                          (distance_match = true) : (distance_match = false);
                     }
                   else
-                    distance_match = 1;
+                    distance_match = true;
 
                   /* Checking for presence of Nexthop IP or Interface*/
                   struct ovsrec_nexthop **nexthops = NULL;
@@ -1398,7 +1649,25 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
 
                   for (i = n = 0; i < row_route->n_nexthops; i++)
                     {
-                      if ((row_route->nexthops[i]->ip_address) ||
+                      if ((nexthop_flag && row_route->nexthops[i]->flag) &&
+                          !strcmp (nexthop_flag, row_route->nexthops[i]->flag))
+                        {
+                          flag_match = true;
+                        }
+                      if (flag_match && nexthop_flag && distance_match)
+                      {
+                         found_flag = true;
+                         ovsrec_nexthop_delete (row_route->nexthops[i]);
+                         if (row_route->n_nexthops == 1)
+                         {
+                           ovsrec_route_delete(row_route);
+                         }
+                         else
+                         {
+                           nexthops[n++] = row_route->nexthops[i];
+                         }
+                      }
+                      else if ((row_route->nexthops[i]->ip_address) ||
                           (row_route->nexthops[i]->ports != NULL &&
                            row_route->nexthops[i]->ports[0]->name))
                         {
@@ -1406,9 +1675,9 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
                             {
                               if (0 == strcmp (argv[1],
                                                row_route->nexthops[i]->ip_address)
-                                               && (distance_match == 1))
+                                               && distance_match)
                                 {
-                                  found_flag = 1;
+                                  found_flag = true;
                                   ovsrec_nexthop_delete (
                                       row_route->nexthops[i]);
                                   if (row_route->n_nexthops == 1)
@@ -1418,16 +1687,14 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
                                 nexthops[n++] = row_route->nexthops[i];
                             }
                           else if (row_route->nexthops[i]->ports != NULL &&
-                                   row_route->nexthops[i]->ports[0]->name
-                              != NULL)
+                                   row_route->nexthops[i]->ports[0]->name != NULL)
                             {
                               if (0 == strcmp (argv[1],
                                                row_route->nexthops[i]->ports[0]->name)
-                                               && (distance_match == 1))
+                                               && distance_match)
                                 {
-                                  found_flag = 1;
-                                  ovsrec_nexthop_delete (
-                                      row_route->nexthops[i]);
+                                  found_flag = true;
+                                  ovsrec_nexthop_delete (row_route->nexthops[i]);
                                   if (row_route->n_nexthops == 1)
                                     {
                                       ovsrec_route_delete (row_route);
@@ -1438,7 +1705,7 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
                             }
                         }
                     }
-                  if (row_route->n_nexthops != 1 && found_flag == 1)
+                  if (row_route->n_nexthops != 1 && found_flag)
                     {
                       ovsrec_route_set_nexthops (row_route, nexthops,
                                                  row_route->n_nexthops - 1);
@@ -1447,13 +1714,13 @@ no_ipv6_route_common (struct vty *vty, char **argv, char *distance)
                 }
             }
         }
-      flag = 1;
+      route_flag = true;
     }
 
-  if (flag == 0)
+  if (!route_flag)
     vty_out (vty, "\nNo ipv6 routes configured %s\n", VTY_NEWLINE);
 
-  if (found_flag == 0)
+  if (!found_flag)
     vty_out (vty, "\nNo such ipv6 route found %s\n", VTY_NEWLINE);
 
   status = cli_do_config_finish (status_txn);
@@ -1478,7 +1745,20 @@ DEFUN (vtysh_no_ipv6_route,
     "Nexthop IP (eg. 2010:bda::)\n"
     "Outgoing interface\n")
 {
-  return no_ipv6_route_common(vty, (char **)argv, NULL);
+  return no_ipv6_route_common(vty, (char **)argv, NULL, NULL);
+}
+
+DEFUN (vtysh_no_ipv6_route_flags,
+    vtysh_no_ipv6_route_flags_cmd,
+    "no ipv6 route X:X::X:X/M (reject|blackhole)",
+    NO_STR
+    IPV6_STR
+    "Configure static route\n"
+    "IP destination prefix (e.g. 2010:bd9::)\n"
+    "Emit an ICMP unreachable when matched\n"
+    "Silently discard pkts when matched\n")
+{
+  return no_ipv6_route_common (vty, (char **)argv, NULL, (char *)argv[1]);
 }
 
 DEFUN (vtysh_no_ipv6_route_distance,
@@ -1492,7 +1772,21 @@ DEFUN (vtysh_no_ipv6_route_distance,
     "Outgoing interface\n"
     "Distance (Default: 1)\n")
 {
-  return no_ipv6_route_common(vty, (char **)argv, (char *)argv[2]);
+  return no_ipv6_route_common(vty, (char **)argv, (char *)argv[2], NULL);
+}
+
+DEFUN (vtysh_no_ipv6_route_flags_distance,
+    vtysh_no_ipv6_route_flags_distance_cmd,
+    "no ipv6 route X:X::X:X/M (reject|blackhole) <1-255>",
+    NO_STR
+    IPV6_STR
+    "Configure static route\n"
+    "IP destination prefix (e.g. 2010:bd9::)\n"
+    "Emit an ICMP unreachable when matched\n"
+    "Silently discard pkts when matched\n"
+    "Distance (Default: 1)\n")
+{
+  return no_ipv6_route_common (vty, (char **)argv, (char *)argv[2], (char *)argv[1]);
 }
 
 #ifdef VRF_ENABLE
@@ -1574,7 +1868,12 @@ show_rib (struct vty *vty, char * ip_addr_family)
 
               for (i = 0; i < row_route->n_nexthops; i++)
                 {
-                  if (row_route->nexthops[i]->ip_address)
+                  if (row_route->nexthops[i]->flag)
+                  {
+                    snprintf (str, sizeof(str), " %s",
+                             row_route->nexthops[i]->flag);
+                  }
+                  else if (row_route->nexthops[i]->ip_address)
                     snprintf (str, sizeof(str), " %s",
                               row_route->nexthops[i]->ip_address);
                   else if (row_route->nexthops[i]->ports != NULL &&
@@ -1797,6 +2096,7 @@ l3routes_ovsdb_init()
     ovsdb_idl_add_table(idl, &ovsrec_table_nexthop);
     ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_ip_address);
     ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_selected);
+    ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_flag);
     ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_ports);
     ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_weight);
     ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_status);
@@ -1848,20 +2148,28 @@ cli_post_init (void)
   vtysh_ret_val retval = e_vtysh_error;
 
   install_element (CONFIG_NODE, &vtysh_ip_route_cmd);
+  install_element (CONFIG_NODE, &vtysh_ip_route_flags_cmd);
+  install_element (CONFIG_NODE, &vtysh_ip_route_flags_distance_cmd);
   install_element (CONFIG_NODE, &vtysh_ip_route_distance_cmd);
 #ifdef VRF_ENABLE
   install_element (CONFIG_NODE, &vtysh_ip_route_vrf_cmd);
 #endif
   install_element (ENABLE_NODE, &vtysh_show_ip_route_cmd);
   install_element (CONFIG_NODE, &vtysh_no_ip_route_cmd);
+  install_element (CONFIG_NODE, &vtysh_no_ip_route_flags_cmd);
+  install_element (CONFIG_NODE, &vtysh_no_ip_route_flags_distance_cmd);
   install_element (CONFIG_NODE, &vtysh_no_ip_route_distance_cmd);
 #ifdef VRF_ENABLE
   install_element (CONFIG_NODE, &vtysh_no_ip_route_vrf_cmd);
 #endif
   install_element (CONFIG_NODE, &vtysh_ipv6_route_cmd);
+  install_element (CONFIG_NODE, &vtysh_ipv6_route_flags_cmd);
+  install_element (CONFIG_NODE, &vtysh_ipv6_route_flags_distance_cmd);
   install_element (CONFIG_NODE, &vtysh_ipv6_route_distance_cmd);
   install_element (ENABLE_NODE, &vtysh_show_ipv6_route_cmd);
   install_element (CONFIG_NODE, &vtysh_no_ipv6_route_cmd);
+  install_element (CONFIG_NODE, &vtysh_no_ipv6_route_flags_cmd);
+  install_element (CONFIG_NODE, &vtysh_no_ipv6_route_flags_distance_cmd);
   install_element (CONFIG_NODE, &vtysh_no_ipv6_route_distance_cmd);
   install_element (ENABLE_NODE, &vtysh_show_rib_cmd);
 

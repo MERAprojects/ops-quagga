@@ -3655,6 +3655,7 @@ ovsdb_init (const char *db_path)
   ovsdb_idl_add_table(idl, &ovsrec_table_nexthop);
   ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_ip_address);
   ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_ports);
+  ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_flag);
   ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_status);
   ovsdb_idl_add_column(idl, &ovsrec_nexthop_col_selected);
   ovsdb_idl_omit_alert(idl, &ovsrec_nexthop_col_selected);
@@ -3894,6 +3895,8 @@ print_key (struct zebra_route_key *rkey)
   VLOG_DBG("prefix=0x%x", rkey->prefix.u.ipv4_addr.s_addr);
   VLOG_DBG("prefix len=%d", rkey->prefix_len);
   VLOG_DBG("nexthop=0x%x", rkey->nexthop.u.ipv4_addr.s_addr);
+  if ( strlen(rkey->flag) !=0 )
+    VLOG_DBG("nexthop flag=%s", rkey->flag);
   if ( strlen(rkey->ifname) !=0 )
     VLOG_DBG("ifname=0x%s", rkey->ifname);
 }
@@ -3998,33 +4001,45 @@ zebra_route_hash_add (const struct ovsrec_route *route)
 
       nexthop = route->nexthops[i];
       if (nexthop)
-        {
-          if (nexthop->ip_address)
+      {
+
+        if (nexthop->ip_address)
 	    {
-              if (addr_family == AF_INET)
-                inet_pton(AF_INET, nexthop->ip_address,
-                          &tmp_key.nexthop.u.ipv4_addr);
+          if (addr_family == AF_INET)
+          {
+            inet_pton(AF_INET, nexthop->ip_address, &tmp_key.nexthop.u.ipv4_addr);
+          }
 	      else if (addr_family == AF_INET6)
-                inet_pton(AF_INET6, nexthop->ip_address,
-                          &tmp_key.nexthop.u.ipv6_addr);
-            }
+	      {
+            inet_pton(AF_INET6, nexthop->ip_address, &tmp_key.nexthop.u.ipv6_addr);
+          }
+        }
 
-          if (nexthop->ports)
-            strncpy(tmp_key.ifname, nexthop->ports[0]->name,
-                    IF_NAMESIZE);
+        if (nexthop->ports)
+        {
+          strncpy(tmp_key.ifname, nexthop->ports[0]->name, IF_NAMESIZE);
+        }
 
-          VLOG_DBG("Hash insert prefix %s nexthop %s, interface %s",
+        if (nexthop->flag)
+        {
+          VLOG_DBG("RL: Nexthop flag branch: %s", nexthop->flag);
+          strncpy(tmp_key.flag, nexthop->flag, 10);
+        }
+
+        VLOG_DBG("Hash insert prefix %s nexthop ip %s, nexthop flag %s, interface %s",
                    route->prefix,
                    nexthop->ip_address ? nexthop->ip_address : "NONE",
+                   nexthop->flag ? nexthop->flag : "NONE",
                    tmp_key.ifname[0] ? tmp_key.ifname : "NONE");
 
-          if (VLOG_IS_DBG_ENABLED())
+        if (VLOG_IS_DBG_ENABLED())
+        {
             print_key(&tmp_key);
-
-          add = hash_get(zebra_route_hash, &tmp_key,
-                         zebra_route_hash_alloc);
-          assert(add);
         }
+
+        add = hash_get(zebra_route_hash, &tmp_key, zebra_route_hash_alloc);
+        assert(add);
+      }
     }
 }
 
@@ -4178,72 +4193,82 @@ zebra_find_ovsdb_deleted_routes (afi_t afi, safi_t safi, u_int32_t id)
 
   /* Loop through all the route nodes in the local rib database */
   for (rn = route_top (table); rn; rn = route_next (rn))
-    {
-      if (!rn)
-        continue;
+  {
+    if (!rn)
+      continue;
 
-      RNODE_FOREACH_RIB (rn, rib)
-        {
+    RNODE_FOREACH_RIB (rn, rib)
+    {
 	  /* Ignore any routes other than static. OSPF and BGP routes.
 	   * Other protocols are not supported currently.*/
-          if ((rib->type != ZEBRA_ROUTE_STATIC &&
-              rib->type != ZEBRA_ROUTE_BGP &&
-              rib->type != ZEBRA_ROUTE_OSPF) ||
-              !rib->nexthop)
-            continue;
+      if ((rib->type != ZEBRA_ROUTE_STATIC &&
+         rib->type != ZEBRA_ROUTE_BGP &&
+         rib->type != ZEBRA_ROUTE_OSPF) ||
+         !rib->nexthop)
+        continue;
 
 	  /* Loop through the nexthops for each route and add it to
 	   * the local cache for deletion
 	   */
-          for (nexthop = rib->nexthop; nexthop; nexthop = nexthop->next)
-	    {
-              memset(&rkey, 0, sizeof (struct zebra_route_key));
-              memset(prefix_str, 0, sizeof(prefix_str));
-              memset(nexthop_str, 0, sizeof(nexthop_str));
+      for (nexthop = rib->nexthop; nexthop; nexthop = nexthop->next)
+      {
+        memset(&rkey, 0, sizeof (struct zebra_route_key));
+        memset(prefix_str, 0, sizeof(prefix_str));
+        memset(nexthop_str, 0, sizeof(nexthop_str));
 
-              if (afi == AFI_IP)
-	        {
-                  rkey.prefix.u.ipv4_addr = rn->p.u.prefix4;
-                  rkey.prefix_len = rn->p.prefixlen;
-                  if (nexthop->type == NEXTHOP_TYPE_IPV4)
-		    {
-                      rkey.nexthop.u.ipv4_addr = nexthop->gate.ipv4;
-                      inet_ntop(AF_INET, &nexthop->gate.ipv4,
+        if (afi == AFI_IP)
+        {
+          rkey.prefix.u.ipv4_addr = rn->p.u.prefix4;
+          rkey.prefix_len = rn->p.prefixlen;
+          if (nexthop->type == NEXTHOP_TYPE_IPV4)
+          {
+            rkey.nexthop.u.ipv4_addr = nexthop->gate.ipv4;
+            inet_ntop(AF_INET, &nexthop->gate.ipv4,
                                 nexthop_str, sizeof(nexthop_str));
-                    }
-                }
-	      else if (afi == AFI_IP6)
-	        {
-                  rkey.prefix.u.ipv6_addr = rn->p.u.prefix6;
-                  rkey.prefix_len = rn->p.prefixlen;
-                  if (nexthop->type == NEXTHOP_TYPE_IPV6)
-		    {
-                      rkey.nexthop.u.ipv6_addr = nexthop->gate.ipv6;
-                      inet_ntop(AF_INET6, &nexthop->gate.ipv6,
+          }
+        }
+        else if (afi == AFI_IP6)
+        {
+          rkey.prefix.u.ipv6_addr = rn->p.u.prefix6;
+          rkey.prefix_len = rn->p.prefixlen;
+          if (nexthop->type == NEXTHOP_TYPE_IPV6)
+          {
+            rkey.nexthop.u.ipv6_addr = nexthop->gate.ipv6;
+            inet_ntop(AF_INET6, &nexthop->gate.ipv6,
                                 nexthop_str, sizeof(nexthop_str));
-                    }
-                }
+          }
+        }
 
-              if ((nexthop->type == NEXTHOP_TYPE_IFNAME) ||
-                  (nexthop->type == NEXTHOP_TYPE_IPV4_IFNAME) ||
-                  (nexthop->type == NEXTHOP_TYPE_IPV6_IFNAME))
-                strncpy(rkey.ifname, nexthop->ifname, IF_NAMESIZE);
+        if ((nexthop->type == NEXTHOP_TYPE_IFNAME) ||
+            (nexthop->type == NEXTHOP_TYPE_IPV4_IFNAME) ||
+            (nexthop->type == NEXTHOP_TYPE_IPV6_IFNAME))
+        {
+          strncpy(rkey.ifname, nexthop->ifname, IF_NAMESIZE);
+        }
 
-              if (VLOG_IS_DBG_ENABLED())
-                print_key(&rkey);
+        if (nexthop->type == NEXTHOP_TYPE_BLACKHOLE)
+        {
+          strncpy(rkey.flag, "blackhole", 10);
+        }
 
-              if (!hash_get(zebra_route_hash, &rkey, NULL))
-	        {
-                  zebra_route_list_add_data(rn, rib, nexthop);
-                  prefix2str(&rn->p, prefix_str, sizeof(prefix_str));
-                  VLOG_DBG("Delete route, prefix %s, nexthop %s, interface %s",
-                           prefix_str[0] ? prefix_str : "NONE",
-                           nexthop_str[0] ? nexthop_str : "NONE",
-                           nexthop->ifname ? nexthop->ifname : "NONE");
-                }
-            }
-        } /* RNODE_FOREACH_RIB */
-    }
+        if (VLOG_IS_DBG_ENABLED())
+        {
+          print_key(&rkey);
+        }
+
+        if (!hash_get(zebra_route_hash, &rkey, NULL))
+        {
+          zebra_route_list_add_data(rn, rib, nexthop);
+          prefix2str(&rn->p, prefix_str, sizeof(prefix_str));
+          VLOG_DBG("Delete route, prefix %s, nexthop %s, nexthop_flag %s, interface %s",
+                   prefix_str[0] ? prefix_str : "NONE",
+                   nexthop_str[0] ? nexthop_str : "NONE",
+                   rkey.flag ? rkey.flag : "NONE",
+                   nexthop->ifname ? nexthop->ifname : "NONE");
+        }
+      }
+    } /* RNODE_FOREACH_RIB */
+  }
 }
 
 /* Find deleted route in ovsdb and remove from route table */
@@ -4420,6 +4445,21 @@ zebra_handle_static_route_change (const struct ovsrec_route *route)
           VLOG_DBG("Null next hop");
           continue;
         }
+      if (nexthop->flag != NULL)
+       {
+         if (!strcmp(nexthop->flag, OVSREC_NEXTHOP_FLAG_BLACKHOLE))
+         {
+           SET_FLAG(flag, ZEBRA_FLAG_BLACKHOLE);
+         }
+         else if (!strcmp(nexthop->flag, OVSREC_NEXTHOP_FLAG_REJECT))
+         {
+           SET_FLAG(flag, ZEBRA_FLAG_REJECT);
+         }
+         else
+         {
+           VLOG_DBG("Unknown flag %s on nexthop", nexthop->flag);
+         }
+       }
 
       /*
        * If the next-hop in the route has changed or a new
@@ -4447,18 +4487,26 @@ zebra_handle_static_route_change (const struct ovsrec_route *route)
                 ret = inet_aton(nexthop->ip_address, &gate);
 
               if (ret == 1)
-                {
-                  VLOG_DBG("Rib nexthop ip=%s", nexthop->ip_address);
-                  log_event("ZEBRA_ROUTE_ADD_NEXTHOP_EVENTS", EV_KV("prefix", "%s",
-                            route->prefix), EV_KV("nexthop", "%s",
-                            nexthop->ip_address));
+              {
+                VLOG_DBG("Rib nexthop ip=%s", nexthop->ip_address);
+                log_event("ZEBRA_ROUTE_ADD_NEXTHOP_EVENTS", EV_KV("prefix", "%s",
+                        route->prefix), EV_KV("nexthop", "%s",
+                        nexthop->ip_address));
                   type = STATIC_IPV6_GATEWAY;
-                }
+              }
+              else if (nexthop->flag && !ipv6_addr_type)
+              {
+                 VLOG_DBG("Rib nexthop flag=%s", nexthop->flag);
+                 log_event("ZEBRA_ROUTE_ADD_NEXTHOP_EVENTS", EV_KV("prefix", "%s",
+                   route->prefix), EV_KV("nexthop", "%s",
+                   nexthop->flag));
+                 type = STATIC_IPV6_GATEWAY;
+              }
               else
-               {
-                  VLOG_ERR("BAD! Rib nexthop ip=%s", nexthop->ip_address);
-                  continue;
-                }
+              {
+                VLOG_ERR("BAD! Rib nexthop ip=%s", nexthop->ip_address);
+                continue;
+              }
             }
           else
             {
@@ -4468,14 +4516,21 @@ zebra_handle_static_route_change (const struct ovsrec_route *route)
 
           if (ipv6_addr_type)
            {
-#ifdef HAVE_IPV6
               static_add_ipv6(&p, type, &ipv6_gate, ifname, flag, distance, 0,
                               (void*) route_uuid);
-#endif
-            }
+           }
           else
-            static_add_ipv4_safi(safi, &p, ifname ? NULL : &gate, ifname,
-                                 flag, distance, 0, (void*) route_uuid);
+          {
+             if (nexthop->flag)
+             {
+               static_add_ipv4_safi(safi, &p, NULL, NULL, flag, distance, 0, (void*) route_uuid);
+             }
+             else
+             {
+               static_add_ipv4_safi(safi, &p, ifname ? NULL : &gate, ifname,
+                                  flag, distance, 0, (void*) route_uuid);
+             }
+          }
         }
     }
 }
@@ -6393,6 +6448,17 @@ zebra_update_selected_route_nexthops_to_db (struct route_node *rn,
                     }
                   break;
 
+                case NEXTHOP_TYPE_BLACKHOLE:
+                   if (action == ZEBRA_NH_INSTALL)
+                   {
+                     zebra_update_selected_nh(rn, route, NULL, "", ZEBRA_NH_INSTALL);
+                   }
+                   else
+                   {
+                     zebra_update_selected_nh(rn, route, NULL, "", ZEBRA_NH_UNINSTALL);
+                   }
+                  break;
+
                 /*
                  * Case when the next-hop type is unregnizable.
                  */
@@ -6503,6 +6569,17 @@ zebra_update_selected_route_nexthops_to_db (struct route_node *rn,
                        zebra_update_selected_nh(rn, route, nexthop->ifname,
                                                 NULL, ZEBRA_NH_UNINSTALL);
                     }
+                  break;
+
+                case NEXTHOP_TYPE_BLACKHOLE:
+                   if (action == ZEBRA_NH_INSTALL)
+                   {
+                     zebra_update_selected_nh(rn, route, NULL, "", ZEBRA_NH_INSTALL);
+                   }
+                   else
+                   {
+                     zebra_update_selected_nh(rn, route, NULL, "", ZEBRA_NH_UNINSTALL);
+                   }
                   break;
 
                 /*
