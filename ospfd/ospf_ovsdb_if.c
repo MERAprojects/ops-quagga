@@ -1018,15 +1018,18 @@ modify_ospf_router_id_config (struct ospf *ospf_cfg,
             }
         }
 
-        if (router_id && !strcmp (router_id, active_router_id)) {
+        if (router_id && active_router_id && !strcmp (router_id, active_router_id)) {
             return 0;
         }
 
-        ovsdb_ospf_router_set_router_id(ospf_mod_row, active_router_id);
-        inet_aton (active_router_id, &addr);
+        if (active_router_id) {
+            ovsdb_ospf_router_set_router_id(ospf_mod_row, active_router_id);
+            inet_aton (active_router_id, &addr);
+        }			
     }
     else {
-        inet_aton (router_id, &addr);
+        if (router_id)		
+            inet_aton (router_id, &addr);
     }
 
     if (!addr.s_addr) {
@@ -2679,13 +2682,6 @@ ovsdb_ospf_add_area_to_router (int ospf_intance,struct in_addr area_id)
     enum ovsdb_idl_txn_status status;
     int i = 0;
 
-    area_txn = ovsdb_idl_txn_create(idl);
-    if (!area_txn)
-    {
-        VLOG_DBG ("Transaction create failed");
-        return;
-    }
-
     ospf_router_row =
         ovsdb_ospf_get_router_by_instance_num (ospf_intance);
     if (!ospf_router_row)
@@ -2693,6 +2689,19 @@ ovsdb_ospf_add_area_to_router (int ospf_intance,struct in_addr area_id)
        VLOG_DBG ("No OSPF router found");
        ovsdb_idl_txn_abort(area_txn);
        return;
+    }
+
+    for (i = 0; i < ospf_router_row->n_areas; i++)
+    {
+        if (ospf_router_row->key_areas[i] == area_id.s_addr)
+            return;
+    }
+	
+    area_txn = ovsdb_idl_txn_create(idl);
+    if (!area_txn)
+    {
+        VLOG_DBG ("Transaction create failed");
+        return;
     }
 
     area_row = ovsrec_ospf_area_insert(area_txn);
@@ -3070,6 +3079,11 @@ ovsdb_area_set_interface(int instance,struct in_addr area_id,
        return;
     }
 
+    for (i = 0; i < area_row->n_ospf_interfaces; i++) {
+        if (!strcmp(area_row->ospf_interfaces[i]->name, oi->ifp->name))
+            return;         
+    }
+	
     intf_txn = ovsdb_idl_txn_create(idl);
     if (!intf_txn)
     {
