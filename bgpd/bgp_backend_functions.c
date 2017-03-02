@@ -5121,6 +5121,7 @@ daemon_bgp_clear (struct bgp *bgp,  afi_t afi, safi_t safi,
     struct peer *peer_new;
     struct listnode *node, *nnode;
     int peer_idx = 1;
+
     /* Clear all neighbors. */
     if (sort == clear_all)
     {
@@ -5165,16 +5166,15 @@ daemon_bgp_clear (struct bgp *bgp,  afi_t afi, safi_t safi,
             return CMD_WARNING;
         }
 
-        peer_deactivate(peer, AFI_IP6, SAFI_UNICAST);
-        peer_activate(peer, AFI_IP6, SAFI_UNICAST);
-
-        if (stype == BGP_CLEAR_SOFT_NONE)
-            ret = peer_clear(peer);
-        else
+	if (stype == BGP_CLEAR_SOFT_NONE) {
+             ret = peer_clear(peer);
+	} else {
             ret = peer_clear_soft(peer, afi, safi, stype);
+	}
 
-        if (ret < 0)
+        if (ret < 0) {
             daemon_bgp_clear_error(peer, afi, safi, ret);
+	}
 
         return CMD_SUCCESS;
     }
@@ -5193,9 +5193,6 @@ daemon_bgp_clear (struct bgp *bgp,  afi_t afi, safi_t safi,
 
         for (ALL_LIST_ELEMENTS(group->peer, node, nnode, peer))
         {
-            peer_deactivate(peer, AFI_IP6, SAFI_UNICAST);
-            peer_activate(peer, AFI_IP6, SAFI_UNICAST);
-
             if (stype == BGP_CLEAR_SOFT_NONE)
             {
                 ret = peer_clear(peer);
