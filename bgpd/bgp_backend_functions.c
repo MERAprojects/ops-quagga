@@ -2565,7 +2565,7 @@ daemon_neighbor_remove_private_as_cmd_execute (struct bgp *bgp, char *peer_str,
 }
 
 int
-daemon_neighbor_next_hop_self_cmd_execute (struct bgp *bgp, char *peer_str,
+daemon_neighbor_next_hop_self_cmd_execute (struct bgp *bgp, const char *peer_str,
                                            afi_t afi, safi_t safi,
                                            bool next_hop_self)
 {
