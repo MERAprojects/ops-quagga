@@ -3135,7 +3135,7 @@ bgp_nbr_af_read_ovsdb_apply_changes (struct ovsdb_idl *idl)
 }
 
 
-bgp_apply_bgp_neighbor_af_changes (struct ovsdb_idl *idl)
+void bgp_apply_bgp_neighbor_af_changes (struct ovsdb_idl *idl)
 {
     const struct ovsrec_bgp_neighbor_af *ovs_nbr_af;
     bool inserted = false;
