@@ -69,7 +69,7 @@ extern int daemon_bgp_clear_request (const char *name, afi_t afi, safi_t safi,
                             const char *arg);
 extern int daemon_neighbor_peer_group_cmd_execute (struct bgp *bgp, const char *groupName);
 extern int daemon_neighbor_weight_cmd_execute(struct bgp *bgp, const char *peer_str, const uint16_t weight);
-extern int daemon_neighbor_next_hop_self_cmd_execute (struct bgp *bgp, char *peer_str, afi_t afi, safi_t safi, bool next_hop_self);
+extern int daemon_neighbor_next_hop_self_cmd_execute (struct bgp *bgp, const char *peer_str, afi_t afi, safi_t safi, bool next_hop_self);
 
 #define BFD_SESSION_STATE_ADMIN_DOWN   0 // must match ovsrec_bfd_session_state
 #define BFD_SESSION_STATE_DOWN         1 // must match ovsrec_bfd_session_state
